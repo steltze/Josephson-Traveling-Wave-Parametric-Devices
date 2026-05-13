@@ -30,9 +30,9 @@ ns=np.arange(ncell)
 epsilon=0.2
 
 ## define local cutoff frequency / speed in the signal  line + plasma frequency of junctions. Here this is constant
-omegasigma0=50e9*2*np.pi
-omegadelta0=50e9*2*np.pi*1.
-omegaj0=30e9*2*np.pi
+omegasigma0=50e9*2*np.pi # Σ mode cutoff
+omegadelta0=50e9*2*np.pi*1. # Δ mode cutoff
+omegaj0=30e9*2*np.pi # junction plasma frequency
 omegasigmas=omegasigma0*np.ones(ncell)
 omegadeltas=omegadelta0*np.ones(ncell)
 omegajs=omegaj0*np.ones(ncell)
@@ -44,7 +44,7 @@ v_delta=a*omegadelta0
 w_c=5e9*2*np.pi
 
 ## set pump velocity at the ~center of gap
-v_p0=v_sigma/3
+v_p0=v_sigma/3 # phase-matching condition
 
 ###pump frequency.  process phase-matched at w_c, all v's are positive, assumes v_p<v_s,v_d
 w_p=(v_delta/v_sigma+1)/(v_delta/v_p0-1)*w_c 
@@ -57,7 +57,7 @@ xmax=0.95
 xmin=1.25
 vps=np.linspace(xmin*v_p0,xmax*v_p0,ncell)
 ## translate this in local pump phase
-thetas=+w_p/vps*ns*a## pump is applied backward 
+thetas=+w_p/vps*ns*a ## pump is applied backward 
 
 
 
@@ -78,7 +78,7 @@ epsilonSs=profile*epsilon
 
 
 ### translate above parameters to : 
-    #Cg: capa to ground
+    # Cg: capa to ground
     # Ci: inner capa between the two lines. If omegasigmas=omegadeltas, should be 0, we should get simple case of a single line, simply Sigma/Delta ports are the same
     # Ls: series inductor (modulated)
     # Cs: series capacitor= junction capacitor
@@ -142,7 +142,7 @@ def redheffer_star(S2, S1):
     return S
 
 class ABCDmat(object):
-    def __init__(self, Ls, Cs, Cg,Ci, Z0,thetas,epsilonSs,w_p=w_p,thetas_rev=None): ###HERE!!
+    def __init__(self, Ls, Cs, Cg, Ci, Z0,thetas,epsilonSs,w_p=w_p,thetas_rev=None): ###HERE!!
         self.Cs = Cs
         self.Ls = Ls
         self.Cg = Cg
@@ -177,15 +177,15 @@ class ABCDmat(object):
 
 
 
-        ws=1/np.sqrt(Ls*Cs)
-        Zs0sigma=1j*wsigma*Ls/(1-wsigma**2/ws**2)
+        ws=1/np.sqrt(Ls*Cs) # plasma frequency (of the in-series elements Cs, Ls)
+        Zs0sigma=1j*wsigma*Ls/(1-wsigma**2/ws**2) # divided by the correction
         Zs1sigma=Zs0sigma*epsilonSs/(1-wsigma**2/ws**2)  ### order 1 in epsilon
         Zs0delta=1j*wdelta*Ls/(1-wdelta**2/ws**2)
         Zs1delta=Zs0delta*epsilonSs/(1-wdelta**2/ws**2)  ### order 1 in epsilon
         
         
         Yg0sigma=1j*wsigma*Cg
-        Yg1sigma=0
+        Yg1sigma=0 # no off-diagonal terms, no pump modulcated corrections
         Yg0delta=1j*wdelta*Cg+1j*wdelta*2*Ci
         Yg1delta=0
        
@@ -195,23 +195,22 @@ class ABCDmat(object):
         one=np.ones([Nf,Nc])+0j
         zero=np.zeros([Nf,Nc])+0j
         
-        
         ### I MISTOOK CONVENTION: NORMAL MATRIX RELATES 1 TO 2, HERE 2 TO 1. I INVERT IT BELOW
         
         A = np.zeros((Nf, Nc,2,2), dtype=one.dtype)
-        A[:, :, 0, 0] = one
+        A[:, :, 0,0] = one
         A[:, :, 0,1] = zero
         A[:, :, 1,0] = zero
         A[:, :, 1,1] = one
         
         B = np.zeros((Nf, Nc, 2, 2), dtype=one.dtype)
-        B[:, :, 0, 0]= -Zs0sigma
-        B[:, :, 0, 1] = -Zs1delta*eithetas.conjugate()
+        B[:, :, 0,0]= -Zs0sigma
+        B[:, :, 0,1] = -Zs1delta*eithetas.conjugate()
         B[:, :, 1,0] = -Zs1sigma*eithetas
         B[:, :, 1,1] = -Zs0delta        
         
         C = np.zeros((Nf, Nc, 2, 2), dtype=one.dtype)
-        C[:, :, 0, 0] = -Yg0sigma
+        C[:, :, 0,0] = -Yg0sigma
         C[:, :, 0,1] = -Yg1delta*eithetas.conjugate()
         C[:, :, 1,0] = -Yg1sigma*eithetas
         C[:, :, 1,1] = -Yg0delta   
@@ -222,8 +221,6 @@ class ABCDmat(object):
         D[:, :, 1,0] = (Zs1sigma*Yg0delta+Yg1sigma*Zs0sigma)*eithetas
         D[:, :, 1,1] = 1+Yg0delta*Zs0delta   
             
-        
-        
         
         mats = np.zeros((Nf, Nc,4,4), dtype=one.dtype)
         
@@ -263,9 +260,6 @@ class ABCDmat(object):
         Smats = Smats_reshaped.reshape(Nf, Nc, 4, 4) 
         Smats = D @ Smats @ Dinv
 
-            
-            
-           
         Stot = Smats[:, 0]   # shape (Nf, 4, 4)
         
             
@@ -324,19 +318,10 @@ class Line(object):
         return out
 
 
-
-
-
-
-
-
 if disorder:
     Lss*=np.random.uniform(1-disorderSpan/2, 1+disorderSpan/2, Lss.shape[0])
     Css*=np.random.uniform(1-disorderSpan/2, 1+disorderSpan/2, Lss.shape[0])
     Cgs*=np.random.uniform(1-disorderSpan/2, 1+disorderSpan/2, Lss.shape[0])
-
-
-
 
 
 ws=freqs*2*np.pi
