@@ -1,8 +1,8 @@
 [project]
-name = "your-project"
+name = "TWPA-TWPC-Simulator"
 version = "0.1.0"
 requires-python = ">=3.10"
-description = "your description here"
+description = ""
 
 [project.dependencies]
 numpy = ">=1.24"
