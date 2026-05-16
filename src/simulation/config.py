@@ -36,14 +36,15 @@ class SimulationConfig:
         Junction plasma angular frequency (rad/s).
         Sets the high-frequency cutoff of the line.
 
-    epsilon : float
-        Pump modulation amplitude (dimensionless). Assumed small (weak pump).
-        Convention: L(x,t) = L0 * (1 + 2*epsilon*cos(wp*t)).
+    epsilon_s : float
+        Pump modulation amplitude of series impedance.
+        Convention: L(x,t) = L0 * (1 + 2*epsilon_s*cos(wp*t)).
+
+    epsilon_g : float
+        Pump modulation amplitude of ground admittance.
 
     v_ratio : float
         Ratio v_sigma / v_pump. Controls how slow the pump is relative to the signal.
-        Higher ratio → easier phase matching → broader bandwidth.
-        Default 3.0 (as in the paper).
 
     freq_min, freq_max : float
         Frequency sweep range in Hz (not rad/s — for human readability).
@@ -66,7 +67,9 @@ class SimulationConfig:
     omega_j0: float = 30e9 * 2 * np.pi
 
     # Pump
-    epsilon: float = 0.2
+    epsilon_s: float = 0.2
+    epsilon_g: float = 0.0
+
     omega_c: float = 5e9 * 2 * np.pi
     v_ratio: float = 3.0  # v_sigma / v_pump
 
