@@ -7,7 +7,7 @@ You need **Python 3.10+** installed. No other tools required.
 ```bash
 git clone https://github.com/your-username/your-repo.git
 cd your-repo
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.lock
 ```
