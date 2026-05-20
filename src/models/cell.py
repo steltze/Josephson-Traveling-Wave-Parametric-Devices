@@ -138,12 +138,12 @@ def compute_impedances(
     omega_idler = omega_signal + omega_pump  # energy conservation: ωI = ωS + ωP
 
     # Expand dims for broadcasting: (Nf, 1) * (1, Nc) → (Nf, Nc)
-    ws = omega_signal[:, np.newaxis]   # (Nf, 1)
-    wd = omega_idler[:, np.newaxis]    # (Nf, 1)
+    ws = omega_signal[:, np.newaxis]  # (Nf, 1)
+    wd = omega_idler[:, np.newaxis]  # (Nf, 1)
 
-    Ls = cell.Ls[np.newaxis, :]        # (1, Nc)
-    Cg = cell.Cg[np.newaxis, :]        # (1, Nc)
-    Ci = cell.Ci[np.newaxis, :]        # (1, Nc)
+    Ls = cell.Ls[np.newaxis, :]  # (1, Nc)
+    Cg = cell.Cg[np.newaxis, :]  # (1, Nc)
+    Ci = cell.Ci[np.newaxis, :]  # (1, Nc)
     eps = cell.epsilon[np.newaxis, :]  # (1, Nc)
 
     # Plasma frequency per cell
@@ -154,8 +154,8 @@ def compute_impedances(
     denom_delta = 1 - wd**2 / omega_J**2  # (Nf, Nc)
 
     # Series impedances (zeroth order)
-    Zs0_sigma = 1j * ws * Ls / denom_sigma   # (Nf, Nc)
-    Zs0_delta = 1j * wd * Ls / denom_delta   # (Nf, Nc)
+    Zs0_sigma = 1j * ws * Ls / denom_sigma  # (Nf, Nc)
+    Zs0_delta = 1j * wd * Ls / denom_delta  # (Nf, Nc)
 
     # Series impedances (first order in ε — pump modulated)
     # Extra 1/denom factor from expanding L(t) to first order
@@ -163,8 +163,8 @@ def compute_impedances(
     Zs1_delta = Zs0_delta * eps / denom_delta  # (Nf, Nc)
 
     # Shunt admittances (no pump modulation — capacitors are linear)
-    Yg0_sigma = 1j * ws * Cg                        # (Nf, Nc)
-    Yg0_delta = 1j * wd * (Cg + 2 * Ci)             # (Nf, Nc)
+    Yg0_sigma = 1j * ws * Cg  # (Nf, Nc)
+    Yg0_delta = 1j * wd * (Cg + 2 * Ci)  # (Nf, Nc)
 
     return {
         "Zs0_sigma": Zs0_sigma,

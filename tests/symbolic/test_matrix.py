@@ -9,11 +9,15 @@ Test groups
 4. symbolic transfer matrix — structure and determinant at M=0,N=0
 5. numerical evaluation    — values match the notebook reference output
 """
+
 import numpy as np
 import pytest
 from sympy import (
-    exp, I, simplify, expand, symbols, Integer, Function,
-    Eq, zeros, Symbol
+    exp,
+    I,
+    simplify,
+    expand,
+    Function,
 )
 
 from src.symbolic.matrix import (
@@ -22,11 +26,20 @@ from src.symbolic.matrix import (
     build_Zs_series,
     build_Yg_shunt,
     extract_harmonic_results,
-    build_transfer_matrix,
     build_symbolic_transfer_matrix,
     build_numeric_matrix,
     # module-level symbols
-    t, theta, omega_p, k, n, omega, Zs0, Yg0, V, Ic, xi,
+    t,
+    theta,
+    omega_p,
+    k,
+    n,
+    omega,
+    Zs0,
+    Yg0,
+    V,
+    Ic,
+    xi,
 )
 
 
@@ -64,14 +77,14 @@ class TestSeriesStructure:
     def test_Zs_series_M1_contains_Zs1(self):
         Zs_m, _ = make_harmonic_functions(1)
         Zs_t = build_Zs_series(Zs_m)
-        Zs1 = Function('Zs1')
+        Zs1 = Function("Zs1")
         # The xi-valued Zs1 must appear in the series
         assert Zs1(xi) in Zs_t.free_symbols or Zs_t.has(Zs1(xi))
 
     def test_Yg_series_M1_contains_Yg1(self):
         _, Yg_m = make_harmonic_functions(1)
         Yg_t = build_Yg_shunt(Yg_m)
-        Yg1 = Function('Yg1')
+        Yg1 = Function("Yg1")
         assert Yg_t.has(Yg1(xi))
 
     def test_Zs_series_M1_has_three_terms(self):
@@ -84,19 +97,22 @@ class TestSeriesStructure:
         """The coefficient of E(0)=1 inside Zs(t) is just Zs0."""
         Zs_m, _ = make_harmonic_functions(1)
         Zs_t = expand(build_Zs_series(Zs_m))
-        dc = Zs_t.coeff(fourier_basis(1))   # coeff of E(1) — should not be Zs0
+        dc = Zs_t.coeff(fourier_basis(1))  # coeff of E(1) — should not be Zs0
         # The constant (non-exponential) part is Zs0
-        dc_part = Zs_t - Zs_t.coeff(fourier_basis(1)) * fourier_basis(1) \
-                        - Zs_t.coeff(fourier_basis(-1)) * fourier_basis(-1)
+        dc_part = (
+            Zs_t
+            - Zs_t.coeff(fourier_basis(1)) * fourier_basis(1)
+            - Zs_t.coeff(fourier_basis(-1)) * fourier_basis(-1)
+        )
         assert simplify(dc_part - Zs0) == 0
 
 
 class TestHarmonicExtraction:
-    @pytest.fixture(scope='class')
+    @pytest.fixture(scope="class")
     def results_M0(self):
         return extract_harmonic_results(0, build_Zs_series([]), build_Yg_shunt([]))
 
-    @pytest.fixture(scope='class')
+    @pytest.fixture(scope="class")
     def results_M1(self):
         Zs_m, Yg_m = make_harmonic_functions(1)
         return extract_harmonic_results(1, build_Zs_series(Zs_m), build_Yg_shunt(Yg_m))
@@ -123,7 +139,7 @@ class TestHarmonicExtraction:
     def test_M1_j1_voltage_coeff_involves_Zs1(self, results_M1):
         """The j=+1 voltage harmonic must contain a Zs1 function."""
         cv1, _ = results_M1[1]
-        Zs1 = Function('Zs1')
+        Zs1 = Function("Zs1")
         assert cv1.has(Zs1)
 
     def test_M1_dc_has_no_exponentials(self, results_M1):
@@ -135,17 +151,17 @@ class TestHarmonicExtraction:
 
 
 class TestSymbolicTransferMatrix:
-    @pytest.fixture(scope='class')
+    @pytest.fixture(scope="class")
     def T_M0_N0(self):
-        """2×2 transfer matrix for M=0 (no pump), single mode k=0."""
+        """2x2 transfer matrix for M=0 (no pump), single mode k=0."""
         T_sym, state_syms, Zs_m, Yg_m = build_symbolic_transfer_matrix(
             M=0, ks_state=[0]
         )
         return T_sym, state_syms
 
-    @pytest.fixture(scope='class')
+    @pytest.fixture(scope="class")
     def T_M1_N1(self):
-        """4×4 transfer matrix for M=1, sidebands [0,1]."""
+        """4x4 transfer matrix for M=1, sidebands [0,1]."""
         T_sym, state_syms, Zs_m, Yg_m = build_symbolic_transfer_matrix(
             M=1, ks_state=[0, 1]
         )
@@ -210,7 +226,7 @@ class TestSymbolicTransferMatrix:
     def test_M1_current_row0_no_Zs2_terms(self, T_M1_N1):
         """With M=1, Zs2 should not appear anywhere in the matrix."""
         T_sym, _ = T_M1_N1
-        Zs2 = Function('Zs2')
+        Zs2 = Function("Zs2")
         assert not T_sym.has(Zs2)
 
     def test_state_syms_ordering(self, T_M1_N1):
@@ -241,28 +257,48 @@ def _Yg_num(m, freq):
     return {1: 0.05 + 0.02j, 2: 0.01 + 0.005j}.get(m, 0 + 0j)
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope="module")
 def T_num_M1_N1():
     M, js_state = 1, [0, 1]
     T_sym, state_syms, Zs_m, Yg_m = build_symbolic_transfer_matrix(M, js_state)
     dim = len(state_syms)
     return build_numeric_matrix(
-        T_sym, dim, M, js_state, Zs_m, Yg_m,
-        _ZS0, _YG0, _THETA, _OMEGA_P,
-        _omega_val, _Zs_num, _Yg_num,
+        T_sym,
+        dim,
+        M,
+        js_state,
+        Zs_m,
+        Yg_m,
+        _ZS0,
+        _YG0,
+        _THETA,
+        _OMEGA_P,
+        _omega_val,
+        _Zs_num,
+        _Yg_num,
         k_val=0,
     )
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope="module")
 def T_num_M0_N0():
     M, js_state = 0, [0]
     T_sym, state_syms, Zs_m, Yg_m = build_symbolic_transfer_matrix(M, js_state)
     dim = len(state_syms)
     return build_numeric_matrix(
-        T_sym, dim, M, js_state, Zs_m, Yg_m,
-        _ZS0, _YG0, _THETA, _OMEGA_P,
-        _omega_val, _Zs_num, _Yg_num,
+        T_sym,
+        dim,
+        M,
+        js_state,
+        Zs_m,
+        Yg_m,
+        _ZS0,
+        _YG0,
+        _THETA,
+        _OMEGA_P,
+        _omega_val,
+        _Zs_num,
+        _Yg_num,
         k_val=0,
     )
 
@@ -319,7 +355,7 @@ class TestNumericalMatrix:
     # ── Reciprocity: det(T) = 1 for lossless M=0 case ───────────────────────
 
     def test_M0_determinant_is_one(self, T_num_M0_N0):
-        """2×2 matrix with purely real Zs0, Yg0 must have det = 1."""
+        """2x2 matrix with purely real Zs0, Yg0 must have det = 1."""
         det = np.linalg.det(T_num_M0_N0)
         assert det.real == pytest.approx(1.0, abs=1e-10)
         assert det.imag == pytest.approx(0.0, abs=1e-10)

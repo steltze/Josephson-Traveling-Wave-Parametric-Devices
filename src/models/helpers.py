@@ -1,10 +1,11 @@
 from dataclasses import dataclass
 import numpy as np
 
+
 @dataclass
 class Immittance:
     """
-    
+
         Parameters
     ----------
     Z0 : float
@@ -12,5 +13,3 @@ class Immittance:
     """
 
     Z0: float = 50.0
-
-    
