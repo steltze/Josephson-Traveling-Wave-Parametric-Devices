@@ -3,8 +3,14 @@ Symbolic transfer-matrix builder for TWPA/TWPC unit cells for time-periodic impe
 The transfer matrix T maps the state vector [V[k,n], I[k,n]] -> [V[k,n+1], I[k,n+1]] for each sideband k simultaneously.
 """
 
-from sympy import symbols, IndexedBase, Function, exp, I, Add, expand, zeros
+from __future__ import annotations
+
+from collections.abc import Callable
+from pathlib import Path
+
 import numpy as np
+from sympy import Add, Expr, Function, IndexedBase, Matrix, expand, exp, symbols, zeros
+from sympy import I
 
 
 # Shared symbolic variables
@@ -19,19 +25,19 @@ Ic                = IndexedBase('I')
 xi                = symbols('xi')   # placeholder frequency argument inside series
 
 
-def fourier_basis(m):
+def fourier_basis(m: int) -> Expr:
     """Return the m-th basis element exp(I*m*omega_p*t)."""
     return exp(I * m * omega_p * t)
 
 
-def make_harmonic_functions(M):
+def make_harmonic_functions(M: int) -> tuple[list[type[Function]], list[type[Function]]]:
     """Return lists of SymPy Function objects Zs_m and Yg_m for orders 1..M."""
     Zs_m = [Function(f"Zs{m}") for m in range(1, M + 1)]
     Yg_m = [Function(f"Yg{m}") for m in range(1, M + 1)]
     return Zs_m, Yg_m
 
 
-def build_Zs_series(Zs_m):
+def build_Zs_series(Zs_m: list[type[Function]]) -> Expr:
     """
     Return the symbolic Zs(t) Fourier series up to order M.
 
@@ -47,7 +53,7 @@ def build_Zs_series(Zs_m):
     return impedance
 
 
-def build_Yg_shunt(Yg_m):
+def build_Yg_shunt(Yg_m: list[type[Function]]) -> Expr:
     """
     Return the symbolic Yg(t) Fourier series up to order M.
 
@@ -61,7 +67,7 @@ def build_Yg_shunt(Yg_m):
     return admittance
 
 
-def extract_harmonic_results(M, Zs_t, Yg_t):
+def extract_harmonic_results(M: int, Zs_t: Expr, Yg_t: Expr) -> dict[int, tuple[Expr, Expr]]:
     """
     Expand the cell update equations and extract per-harmonic coefficients.
 
@@ -105,7 +111,7 @@ def extract_harmonic_results(M, Zs_t, Yg_t):
     return results
 
 
-def build_transfer_matrix(M, ks_state, results):
+def build_transfer_matrix(M: int, ks_state: list[int], results: dict[int, tuple[Expr, Expr]]) -> tuple[Matrix, list[Expr]]:
     """
     Build the symbolic transfer matrix T.
 
@@ -138,7 +144,7 @@ def build_transfer_matrix(M, ks_state, results):
     return T_sym, state_syms
 
 
-def build_symbolic_transfer_matrix(M, ks_state):
+def build_symbolic_transfer_matrix(M: int, ks_state: list[int]) -> tuple[Matrix, list[Expr], list[type[Function]], list[type[Function]]]:
     """
     Run the complete symbolic pipeline for given truncation order M and
     sideband list ks_state.
@@ -159,21 +165,21 @@ def build_symbolic_transfer_matrix(M, ks_state):
 
 
 def build_numeric_matrix(
-    T_sym,
-    dim,
-    M,
-    ks_state,
-    Zs_m,
-    Yg_m,
-    Zs0_val,
-    Yg0_val,
-    theta_val,
-    omega_p_val,
-    omega_val_fn,
-    Zs_num_fn,
-    Yg_num_fn,
-    k_val=0,
-):
+    T_sym: Matrix,
+    dim: int,
+    M: int,
+    ks_state: list[int],
+    Zs_m: list[type[Function]],
+    Yg_m: list[type[Function]],
+    Zs0_val: complex,
+    Yg0_val: complex,
+    theta_val: float,
+    omega_p_val: float,
+    omega_val_fn: Callable[[int], float],
+    Zs_num_fn: Callable[[int, float], complex],
+    Yg_num_fn: Callable[[int, float], complex],
+    k_val: int = 0,
+) -> np.ndarray:
     """
     Substitute numerical values into T_sym and return a numpy complex array.
 
@@ -223,12 +229,12 @@ def build_numeric_matrix(
 
 
 def export_matrix_plot(
-    T_sym,
-    state_syms=None,
-    filename="transfer_matrix.pdf",
-    title="Transfer Matrix",
-    fontsize=9,
-):
+    T_sym: Matrix,
+    state_syms: list[Expr] | None = None,
+    filename: str = "transfer_matrix.pdf",
+    title: str = "Transfer Matrix",
+    fontsize: int = 9,
+) -> Path:
     """
     Render T_sym as a PDF figure.
 
@@ -245,7 +251,6 @@ def export_matrix_plot(
     pathlib.Path of the saved figure
     """
     import re
-    from pathlib import Path
     import matplotlib
 
     matplotlib.rcParams["text.usetex"] = False
@@ -288,7 +293,7 @@ def export_matrix_plot(
     r = 1.0 - bkt / fig_w
     b = bpad / fig_h
     t = 1.0 - tpad / fig_h
-    ax = fig.add_axes([l, b, r - l, t - b])
+    ax = fig.add_axes((l, b, r - l, t - b))
     ax.set_xlim(0, dim)
     ax.set_ylim(0, dim)
     ax.axis("off")

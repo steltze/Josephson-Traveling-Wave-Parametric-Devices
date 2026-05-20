@@ -17,8 +17,15 @@ s: series e.g. Zs
 g: ground e.g. Yg
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import numpy as np
 from dataclasses import dataclass
+
+if TYPE_CHECKING:
+    from simulation.config import SimulationConfig
 
 
 @dataclass
@@ -50,11 +57,11 @@ class Cell:
         Computed from the pump wavevector: θ_n = k_p · n · a.
     """
 
-    Zs: int
-    Yg: int
-    Yi: int
-    epsilon_s: int
-    epsilon_g: int
+    Zs: complex
+    Yg: complex
+    Yi: complex
+    epsilon_s: float
+    epsilon_g: float
     theta: np.ndarray
 
     # @property
@@ -96,7 +103,7 @@ def compute_impedances(
     cell: CellParameters,
     omega_signal: np.ndarray,
     omega_pump: float,
-) -> dict:
+) -> dict[str, np.ndarray]:
     """
     Compute the series impedances and shunt admittances for signal and idler
     frequencies, including the plasma frequency correction and pump modulation.
@@ -177,7 +184,7 @@ def compute_impedances(
     }
 
 
-def build_cell_parameters_from_config(config) -> CellParameters:
+def build_cell_parameters_from_config(config: SimulationConfig) -> CellParameters:
     """
     Derive CellParameters from a SimulationConfig.
 

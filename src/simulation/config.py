@@ -81,7 +81,7 @@ class SimulationConfig:
     # Random seed for reproducibility (None = random each time)
     disorder_seed: int | None = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate config."""
 
     @property
