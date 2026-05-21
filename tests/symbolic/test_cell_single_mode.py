@@ -175,7 +175,6 @@ class TestSymbolicTransferMatrix:
         )
         return T_sym, state_syms
 
-    # ── shape ────────────────────────────────────────────────────────────────
 
     def test_shape_M0_N0(self, T_M0_N0):
         T_sym, _ = T_M0_N0
@@ -185,7 +184,6 @@ class TestSymbolicTransferMatrix:
         T_sym, _ = T_M1_N1
         assert T_sym.shape == (4, 4)
 
-    # ── M=0 entries ──────────────────────────────────────────────────────────
 
     def test_M0_T00_is_one(self, T_M0_N0):
         T_sym, _ = T_M0_N0
@@ -209,7 +207,6 @@ class TestSymbolicTransferMatrix:
         det = T_sym[0, 0] * T_sym[1, 1] - T_sym[0, 1] * T_sym[1, 0]
         assert simplify(expand(det) - 1) == 0
 
-    # ── M=1 structure ─────────────────────────────────────────────────────────
 
     def test_M1_diagonal_voltage_rows_are_one(self, T_M1_N1):
         """T[0,0] and T[2,2] are both 1 (V[j,n] -> V[j,n+1] direct coupling)."""
@@ -320,7 +317,6 @@ class TestNumericalMatrix:
     def test_dtype_is_complex(self, T_num_M1_N1):
         assert np.issubdtype(T_num_M1_N1.dtype, np.complexfloating)
 
-    # ── Specific real-part values from the notebook output ───────────────────
 
     def test_T00_real_is_one(self, T_num_M1_N1):
         assert T_num_M1_N1[0, 0].real == pytest.approx(1.0, abs=1e-10)
@@ -362,7 +358,6 @@ class TestNumericalMatrix:
     def test_T33_real(self, T_num_M1_N1):
         assert T_num_M1_N1[3, 3].real == pytest.approx(1.508, abs=1e-3)
 
-    # ── Reciprocity: det(T) = 1 for lossless M=0 case ───────────────────────
 
     def test_M0_determinant_is_one(self, T_num_M0_N0):
         """2x2 matrix with purely real Zs0, Yg0 must have det = 1."""
@@ -386,10 +381,6 @@ class TestNumericalMatrix:
         expected = 1.0 + _YG0.real * _ZS0.real
         assert T_num_M0_N0[1, 1].real == pytest.approx(expected, abs=1e-10)
 
-
-_THETA_SWEEP = [0.0, np.pi / 4, np.pi / 2]
-
-# ── cell-freq grid helpers ───────────────────────────────────────────────────
 
 _OMEGA_S_SWEEP = [0.8, 1.0, 1.2, 1.4]  # Nf = 4 signal frequencies
 _THETA_FOR_FREQ = [0.0, np.pi / 6, np.pi / 3, np.pi / 2]  # one theta per freq point
@@ -421,34 +412,6 @@ def _make_freq_params(omega_s, theta=_THETA):
 
 
 @pytest.fixture(scope="module")
-def sweep_fixture():
-    """Return (cell, T_sym, dim, M, ks_state, Zs_m, Yg_m, T_sweep)."""
-    cell = CellSingleMode()
-    M, ks_state = 1, [0, 1]
-    T_sym, state_syms, Zs_m, Yg_m = cell.build_symbolic_transfer_matrix(M, ks_state)
-    dim = len(state_syms)
-
-    params_sequence = [
-        dict(
-            Zs0_val=_ZS0,
-            Yg0_val=_YG0,
-            theta_val=th,
-            omega_p_val=_OMEGA_P,
-            omega_val_fn=_omega_val,
-            Zs_num_fn=_Zs_num,
-            Yg_num_fn=_Yg_num,
-            k_val=0,
-        )
-        for th in _THETA_SWEEP
-    ]
-
-    T_sweep = cell.build_numeric_matrix_sweep(
-        T_sym, dim, M, ks_state, Zs_m, Yg_m, params_sequence
-    )
-    return cell, T_sym, dim, M, ks_state, Zs_m, Yg_m, T_sweep
-
-
-@pytest.fixture(scope="module")
 def cell_freq_fixture():
     """Return (cell, T_sym, dim, Zs_m, Yg_m, T_grid)."""
     cell = CellSingleMode()
@@ -467,7 +430,6 @@ def cell_freq_fixture():
 class TestCellFreqMatrices:
     def test_shape(self, cell_freq_fixture):
         *_, T_grid = cell_freq_fixture
-        print(T_grid)
         assert T_grid.shape == (len(_OMEGA_S_SWEEP), len(_CELL_PARAMS), 4, 4)
 
     def test_dtype_is_complex(self, cell_freq_fixture):
