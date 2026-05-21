@@ -257,11 +257,11 @@ def _omega_val(q):
     return _OMEGA_S + q * _OMEGA_P
 
 
-def _Zs_num(m):
+def _Zs_num(m, omega):
     return {1: 0.1 + 0.05j, 2: 0.02 + 0.01j}.get(m, 0 + 0j)
 
 
-def _Yg_num(m):
+def _Yg_num(m, omega):
     return {1: 0.05 + 0.02j, 2: 0.01 + 0.005j}.get(m, 0 + 0j)
 
 

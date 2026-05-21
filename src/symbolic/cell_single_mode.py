@@ -224,9 +224,9 @@ class CellSingleMode:
         for _k in k_range:
             subs[self.omega[_k]] = omega_val_fn(_k)
             for mi, Zm in enumerate(Zs_m, start=1):
-                subs[Zm(self.omega[_k])] = Zs_num_fn(mi)
+                subs[Zm(self.omega[_k])] = Zs_num_fn(mi, self.omega[_k])
             for mi, Ym in enumerate(Yg_m, start=1):
-                subs[Ym(self.omega[_k])] = Yg_num_fn(mi)
+                subs[Ym(self.omega[_k])] = Yg_num_fn(mi, self.omega[_k])
 
         T_num = np.zeros((dim, dim), dtype=complex)
         for i in range(dim):
