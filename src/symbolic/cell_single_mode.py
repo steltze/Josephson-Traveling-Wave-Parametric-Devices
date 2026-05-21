@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 from sympy import Add, Expr, Function, IndexedBase, Matrix, expand, exp, symbols, zeros
@@ -233,6 +234,52 @@ class CellSingleMode:
             for j in range(dim):
                 T_num[i, j] = complex(T_sym[i, j].subs(subs))
         return T_num
+
+    def build_cell_freq_matrices(
+        self,
+        T_sym: Matrix,
+        dim: int,
+        M: int,
+        ks_state: list[int],
+        Zs_m: list[type[Function]],
+        Yg_m: list[type[Function]],
+        cell_params_list: list[dict[str, Any]],
+        freq_params_list: list[dict[str, Any]],
+    ) -> np.ndarray:
+        """
+        Evaluate T_sym on a (Nf x Nc) grid of frequency and cell parameters.
+
+        For each pair (f, c) the matrix is built by merging freq_params_list[f]
+        and cell_params_list[c], with cell keys taking precedence.
+
+        Parameters
+        ----------
+        cell_params_list : list of Nc dicts
+            Per-cell keyword arguments for build_numeric_matrix, typically
+            Zs0_val, Yg0_val, Zs_num_fn, Yg_num_fn.
+        freq_params_list : list of Nf dicts
+            Per-frequency keyword arguments, typically omega_val_fn,
+            omega_p_val, theta_val, k_val.
+
+        Returns
+        -------
+        T_grid : np.ndarray, shape (Nf, Nc, dim, dim), dtype complex
+        """
+        Nf = len(freq_params_list)
+        Nc = len(cell_params_list)
+        T_grid = np.empty((Nf, Nc, dim, dim), dtype=complex)
+        for f, freq_params in enumerate(freq_params_list):
+            for c, cell_params in enumerate(cell_params_list):
+                T_grid[f, c] = self.build_numeric_matrix(
+                    T_sym,
+                    dim,
+                    M,
+                    ks_state,
+                    Zs_m,
+                    Yg_m,
+                    **{**freq_params, **cell_params},
+                )
+        return T_grid
 
     def export_matrix_plot(
         self,

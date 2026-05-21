@@ -385,3 +385,127 @@ class TestNumericalMatrix:
     def test_M0_T11_is_one_plus_Yg0_Zs0(self, T_num_M0_N0):
         expected = 1.0 + _YG0.real * _ZS0.real
         assert T_num_M0_N0[1, 1].real == pytest.approx(expected, abs=1e-10)
+
+
+_THETA_SWEEP = [0.0, np.pi / 4, np.pi / 2]
+
+# ── cell-freq grid helpers ───────────────────────────────────────────────────
+
+_OMEGA_S_SWEEP = [0.8, 1.0, 1.2, 1.4]  # Nf = 4 signal frequencies
+_THETA_FOR_FREQ = [0.0, np.pi / 6, np.pi / 3, np.pi / 2]  # one theta per freq point
+
+# Two cells with distinct impedance/admittance profiles
+_CELL_PARAMS = [
+    dict(
+        Zs0_val=1.0 + 0.0j,
+        Yg0_val=0.5 + 0.0j,
+        Zs_num_fn=lambda m, _: {1: 0.10 + 0.05j}.get(m, 0j),
+        Yg_num_fn=lambda m, _: {1: 0.05 + 0.02j}.get(m, 0j),
+    ),
+    dict(
+        Zs0_val=1.5 + 0.0j,
+        Yg0_val=0.3 + 0.0j,
+        Zs_num_fn=lambda m, _: {1: 0.20 + 0.03j}.get(m, 0j),
+        Yg_num_fn=lambda m, _: {1: 0.08 + 0.01j}.get(m, 0j),
+    ),
+]
+
+
+def _make_freq_params(omega_s, theta=_THETA):
+    return dict(
+        omega_val_fn=lambda k, os=omega_s: os + k * _OMEGA_P,
+        omega_p_val=_OMEGA_P,
+        theta_val=theta,
+        k_val=0,
+    )
+
+
+@pytest.fixture(scope="module")
+def sweep_fixture():
+    """Return (cell, T_sym, dim, M, ks_state, Zs_m, Yg_m, T_sweep)."""
+    cell = CellSingleMode()
+    M, ks_state = 1, [0, 1]
+    T_sym, state_syms, Zs_m, Yg_m = cell.build_symbolic_transfer_matrix(M, ks_state)
+    dim = len(state_syms)
+
+    params_sequence = [
+        dict(
+            Zs0_val=_ZS0,
+            Yg0_val=_YG0,
+            theta_val=th,
+            omega_p_val=_OMEGA_P,
+            omega_val_fn=_omega_val,
+            Zs_num_fn=_Zs_num,
+            Yg_num_fn=_Yg_num,
+            k_val=0,
+        )
+        for th in _THETA_SWEEP
+    ]
+
+    T_sweep = cell.build_numeric_matrix_sweep(
+        T_sym, dim, M, ks_state, Zs_m, Yg_m, params_sequence
+    )
+    return cell, T_sym, dim, M, ks_state, Zs_m, Yg_m, T_sweep
+
+
+@pytest.fixture(scope="module")
+def cell_freq_fixture():
+    """Return (cell, T_sym, dim, Zs_m, Yg_m, T_grid)."""
+    cell = CellSingleMode()
+    M, ks_state = 1, [0, 1]
+    T_sym, state_syms, Zs_m, Yg_m = cell.build_symbolic_transfer_matrix(M, ks_state)
+    dim = len(state_syms)
+    freq_params_list = [
+        _make_freq_params(os, th) for os, th in zip(_OMEGA_S_SWEEP, _THETA_FOR_FREQ)
+    ]
+    T_grid = cell.build_cell_freq_matrices(
+        T_sym, dim, M, ks_state, Zs_m, Yg_m, _CELL_PARAMS, freq_params_list
+    )
+    return cell, T_sym, dim, M, ks_state, Zs_m, Yg_m, T_grid
+
+
+class TestCellFreqMatrices:
+    def test_shape(self, cell_freq_fixture):
+        *_, T_grid = cell_freq_fixture
+        print(T_grid)
+        assert T_grid.shape == (len(_OMEGA_S_SWEEP), len(_CELL_PARAMS), 4, 4)
+
+    def test_dtype_is_complex(self, cell_freq_fixture):
+        *_, T_grid = cell_freq_fixture
+        assert np.issubdtype(T_grid.dtype, np.complexfloating)
+
+    def test_each_entry_matches_build_numeric_matrix(self, cell_freq_fixture):
+        """T_grid[f, c] must equal the individually computed matrix."""
+        cell, T_sym, dim, M, ks_state, Zs_m, Yg_m, T_grid = cell_freq_fixture
+        for f, (os, th) in enumerate(zip(_OMEGA_S_SWEEP, _THETA_FOR_FREQ)):
+            freq_p = _make_freq_params(os, th)
+            for c, cell_p in enumerate(_CELL_PARAMS):
+                T_ref = cell.build_numeric_matrix(
+                    T_sym,
+                    dim,
+                    M,
+                    ks_state,
+                    Zs_m,
+                    Yg_m,
+                    **{**freq_p, **cell_p},
+                )
+                np.testing.assert_allclose(T_grid[f, c], T_ref, atol=1e-12)
+
+    def test_different_cells_give_different_matrices(self, cell_freq_fixture):
+        """Cells with different Zs/Yg must produce different matrices."""
+        *_, T_grid = cell_freq_fixture
+        assert not np.allclose(T_grid[0, 0], T_grid[0, 1])
+
+    def test_different_freqs_give_different_matrices(self, cell_freq_fixture):
+        """Different freq points (each with a distinct theta_val) must differ."""
+        *_, T_grid = cell_freq_fixture
+        # _THETA_FOR_FREQ assigns a unique pump phase per freq point,
+        # so off-diagonal coupling entries change between freq slices.
+        assert not np.allclose(T_grid[0, 0], T_grid[1, 0])
+
+    def test_freq_axis_independent_of_cell_axis(self, cell_freq_fixture):
+        """Changing frequency should not affect the cell-axis ordering."""
+        *_, T_grid = cell_freq_fixture
+        # cell 0 at freq 0 vs cell 1 at freq 0: same comparison as above
+        # but also verify cell 0 at freq 1 vs cell 1 at freq 1 differ
+        assert not np.allclose(T_grid[1, 0], T_grid[1, 1])
