@@ -6,13 +6,33 @@ The transfer matrix T maps the state vector [V[k,n], I[k,n]] -> [V[k,n+1], I[k,n
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 import numpy as np
-from sympy import Add, Expr, Function, Indexed, IndexedBase, Matrix, expand, exp, symbols, zeros
+from sympy import (
+    Add,
+    Expr,
+    Function,
+    Indexed,
+    IndexedBase,
+    Matrix,
+    expand,
+    exp,
+    symbols,
+    zeros,
+)
 from sympy import I
 from sympy.core.function import AppliedUndef
+
+
+@dataclass
+class CellImmitance:
+    theta: float
+    Zs0_fn: Callable  # omega -> complex
+    Yg0_fn: Callable  # omega -> complex
+    Zs_harm_fn: Callable  # (m: int, omega) -> complex  (m-th Fourier coeff of Zs)
+    Yg_harm_fn: Callable  # (m: int, omega) -> complex
 
 
 class CellSingleMode:
@@ -134,10 +154,9 @@ class CellSingleMode:
         state_syms : list of state symbols in row/column order
         """
         n_modes = len(ks_state)
-        state_syms = (
-            [self.V[_k, self.n] for _k in ks_state]
-            + [self.Ic[_k, self.n] for _k in ks_state]
-        )
+        state_syms = [self.V[_k, self.n] for _k in ks_state] + [
+            self.Ic[_k, self.n] for _k in ks_state
+        ]
         dim = len(state_syms)
 
         ms_full = list(range(-2 * M, 2 * M + 1))
@@ -191,7 +210,8 @@ class CellSingleMode:
         indexed_base_names = {str(ix.base) for ix in indexed}
         scalars = sorted(
             [
-                s for s in T_sym.free_symbols
+                s
+                for s in T_sym.free_symbols
                 if not isinstance(s, IndexedBase) and str(s) not in indexed_base_names
             ],
             key=str,
@@ -212,58 +232,35 @@ class CellSingleMode:
         ks_state: list[int],
         Zs_m: list[type[Function]],
         Yg_m: list[type[Function]],
-        Zs0_fn: Callable[[float], complex],
-        Yg0_fn: Callable[[float], complex],
-        theta_val: float,
-        omega_p_val: float,
+        cell: CellImmitance,
         omega_val_fn: Callable[[int], float],
-        Zs_num_fn: Callable[[int, float], complex],
-        Yg_num_fn: Callable[[int, float], complex],
+        omega_p_val: float,
         k_val: int = 0,
     ) -> np.ndarray:
         """
         Substitute numerical values into T_sym and return a numpy complex array.
 
-        Parameters
-        ----------
-        T_sym        : sympy Matrix from build_symbolic_transfer_matrix
-        dim          : int, matrix size (= 2*len(ks_state))
-        M            : Floquet truncation order
-        ks_state     : list of sideband indices
-        Zs_m, Yg_m  : harmonic Function objects from _make_harmonic_functions
-        Zs0_fn       : callable  omega -> complex  (DC series impedance)
-        Yg0_fn       : callable  omega -> complex  (DC shunt admittance)
-        theta_val    : float, pump phase
-        omega_p_val  : float, pump angular frequency
-        omega_val_fn : callable  q -> float  (carrier frequency of mode q)
-        Zs_num_fn    : callable  (m, freq) -> complex  (m-th Zs Fourier coefficient)
-        Yg_num_fn    : callable  (m, freq) -> complex  (m-th Yg Fourier coefficient)
-        k_val        : int, center mode index
-
         Returns
         -------
-        T_num : numpy ndarray, shape (dim, dim), dtype complex, in standard ABCD
-                block order [V[k0], V[k1], ..., I[k0], I[k1], ...]
+        T_num : numpy ndarray, shape (dim, dim), dtype complex
         """
         N_max = max(abs(_k) for _k in ks_state) if ks_state else 0
         k_range = range(k_val - (N_max + 2 * M), k_val + (N_max + 2 * M) + 1)
-
         omega_center = omega_val_fn(k_val)
-        subs = {
-            self.theta: theta_val,
-            self.Zs0: Zs0_fn(omega_center),
-            self.Yg0: Yg0_fn(omega_center),
-            self.omega_p: omega_p_val,
-            self.k: k_val,
-        }
 
+        subs = {
+            self.theta: cell.theta,
+            self.Zs0: cell.Zs0_fn(omega_center),
+            self.Yg0: cell.Yg0_fn(omega_center),
+            self.omega_p: omega_p_val,
+        }
         for _k in k_range:
             omega_k = omega_val_fn(_k)
             subs[self.omega[_k]] = omega_k
             for mi, Zm in enumerate(Zs_m, start=1):
-                subs[Zm(self.omega[_k])] = Zs_num_fn(mi, omega_k)
+                subs[Zm(self.omega[_k])] = cell.Zs_harm_fn(mi, omega_k)
             for mi, Ym in enumerate(Yg_m, start=1):
-                subs[Ym(self.omega[_k])] = Yg_num_fn(mi, omega_k)
+                subs[Ym(self.omega[_k])] = cell.Yg_harm_fn(mi, omega_k)
 
         if id(T_sym) not in self._lambdify_cache:
             self._build_evaluator(T_sym)
@@ -278,42 +275,55 @@ class CellSingleMode:
         ks_state: list[int],
         Zs_m: list[type[Function]],
         Yg_m: list[type[Function]],
-        cell_params_list: list[dict[str, Any]],
-        freq_params_list: list[dict[str, Any]],
+        freqs: np.ndarray,
+        w_p: float,
+        cells: list[CellImmitance],
     ) -> np.ndarray:
         """
-        Evaluate T_sym on a (Nf x Nc) grid of frequency and cell parameters.
+        Evaluate T_sym on a (Nf x Nc) grid, vectorized over frequencies.
 
-        For each pair (f, c) the matrix is built by merging freq_params_list[f]
-        and cell_params_list[c], with cell keys taking precedence.
-
-        Parameters
-        ----------
-        cell_params_list : list of Nc dicts
-            Per-cell keyword arguments for build_numeric_matrix, typically
-            Zs0_val, Yg0_val, Zs_num_fn, Yg_num_fn.
-        freq_params_list : list of Nf dicts
-            Per-frequency keyword arguments, typically omega_val_fn,
-            omega_p_val, theta_val, k_val.
+        For each cell the lambdified matrix is evaluated with all Nf frequency
+        values at once (numpy broadcasting), reducing Python call overhead from
+        Nf*Nc to Nc.
 
         Returns
         -------
         T_grid : np.ndarray, shape (Nf, Nc, dim, dim), dtype complex
         """
-        Nf = len(freq_params_list)
-        Nc = len(cell_params_list)
+        freqs = np.asarray(freqs)
+        Nf, Nc = len(freqs), len(cells)
         T_grid = np.empty((Nf, Nc, dim, dim), dtype=complex)
-        for f, freq_params in enumerate(freq_params_list):
-            for c, cell_params in enumerate(cell_params_list):
-                T_grid[f, c] = self.build_numeric_matrix(
-                    T_sym,
-                    dim,
-                    M,
-                    ks_state,
-                    Zs_m,
-                    Yg_m,
-                    **{**freq_params, **cell_params},
-                )
+
+        N_max = max(abs(k) for k in ks_state) if ks_state else 0
+        k_range = range(-(N_max + 2 * M), N_max + 2 * M + 1)
+
+        if id(T_sym) not in self._lambdify_cache:
+            self._build_evaluator(T_sym)
+        fn, keys = self._lambdify_cache[id(T_sym)]
+
+        zeros = np.zeros(Nf, dtype=complex)
+        for c, cell in enumerate(cells):
+            subs = {
+                self.theta: cell.theta,
+                self.Zs0: cell.Zs0_fn(freqs),
+                self.Yg0: cell.Yg0_fn(freqs),
+                self.omega_p: w_p,
+            }
+            for k in k_range:
+                omega_k = freqs + k * w_p
+                subs[self.omega[k]] = omega_k
+                for mi, Zm in enumerate(Zs_m, start=1):
+                    subs[Zm(self.omega[k])] = cell.Zs_harm_fn(mi, omega_k)
+                for mi, Ym in enumerate(Yg_m, start=1):
+                    subs[Ym(self.omega[k])] = cell.Yg_harm_fn(mi, omega_k)
+
+            # fn returns dim×dim nested list; entries may be scalar for constant
+            # matrix elements — add zeros to broadcast all entries to shape (Nf,)
+            raw = fn(*[subs[k] for k in keys])
+            T_grid[:, c] = np.array(
+                [[e + zeros for e in row] for row in raw], dtype=complex
+            ).transpose(2, 0, 1)
+
         return T_grid
 
     def export_matrix_plot(

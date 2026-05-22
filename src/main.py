@@ -1,16 +1,19 @@
+import time
+
 import numpy as np
 
-from symbolic.cell_single_mode import CellSingleMode
+from symbolic.cell_single_mode import CellImmitance, CellSingleMode
 from analysis.s_parameters import plot_s_parameters
 from solver.abcd_matrix import ABCDMatrix
 import matplotlib.pyplot as plt
+
 
 def main():
     ## port impedance
     Z0 = 50
 
     ### signal frequency span
-    freqs = np.linspace(0.5e9, 150e9, 100)
+    freqs = np.linspace(0.5e9, 12e9, 2000)
 
     ## add disorder to the values of L's and C's
     disorder = True
@@ -20,7 +23,7 @@ def main():
     a = 10e-6
 
     # number of cells
-    ncell = 200
+    ncell = 500
     ns = np.arange(ncell)
     M, ks_state = 1, [0, 1]
     epsilon = 0.0
@@ -42,9 +45,7 @@ def main():
     w_p = v_s / v_p * w_c * 1 / k
 
     if w_p < 0:
-        raise ValueError(
-            "!! w_p is negative !!"
-        )
+        raise ValueError("!! w_p is negative !!")
 
     ### array defining local pump velocity within the line (center velocity : conversion matched at w_c)
     xmax = 0.95
@@ -73,10 +74,6 @@ def main():
     Cgs = 1 / (omegaRs * ZRs)
     Css = 1 / (w_js**2 * Lss)
 
-    # ws = freqs * 2 * np.pi
-    # wd = ws + w_p
-    # freqsd = wd / 2 / np.pi
-
     if disorder:
         Lss *= np.random.uniform(
             1 - disorderSpan / 2, 1 + disorderSpan / 2, Lss.shape[0]
@@ -88,73 +85,59 @@ def main():
             1 - disorderSpan / 2, 1 + disorderSpan / 2, Lss.shape[0]
         )
 
-    cell = CellSingleMode()
-    import time
+    solver = CellSingleMode()
+
     start_time = time.time()
-    T_sym, state_syms, Zs_m, Yg_m = cell.build_symbolic_transfer_matrix(M, ks_state)
+    T_sym, state_syms, Zs_m, Yg_m = solver.build_symbolic_transfer_matrix(M, ks_state)
     print(f"---[1] {(time.time() - start_time):0.4f} seconds ---")
 
     dim = len(state_syms)
 
     start_time = time.time()
-    freq_params_list = [_make_freq_params(f * 2 * np.pi, w_p) for f in freqs]
-    cell_params = prepare_immitances(Css, Lss, Cgs, epsilonSs, thetas)
+    cells = prepare_immitances(Css, Lss, Cgs, epsilonSs, thetas)
     print(f"---[2] {(time.time() - start_time):0.4f} seconds ---")
 
-
     start_time = time.time()
-    T_grid = cell.build_cell_freq_matrices(
-        T_sym, dim, M, ks_state, Zs_m, Yg_m, cell_params, freq_params_list
+    T_grid = solver.build_cell_freq_matrices(
+        T_sym,
+        dim,
+        M,
+        ks_state,
+        Zs_m,
+        Yg_m,
+        freqs * 2 * np.pi,
+        w_p,
+        cells,
     )
     print(f"---[3] {(time.time() - start_time):0.4f} seconds ---")
 
-
     start_time = time.time()
     cascaded_S_matrix = ABCDMatrix.from_cell_grid_S(T_grid, Z0=Z0)
-    ax = plot_s_parameters(cascaded_S_matrix.array, freqs, [(1,1), (1,2), (2,1), (2, 2)])
+    ax = plot_s_parameters(
+        cascaded_S_matrix.array, freqs, [(1, 1), (1, 2), (2, 1), (2, 2)]
+    )
     print(f"---[4] {(time.time() - start_time):0.4f} seconds ---")
-
-
+    # print(cascaded_S_matrix.array)
     plt.show()
-    
+
     return
 
 
-def _make_freq_params(omega_s, omega_p):
-    return dict(
-        omega_val_fn=lambda k, os=omega_s: os + k * omega_p,
-        omega_p_val=omega_p,
-        k_val=0,
-    )
-
-
-def prepare_immitances(Cs, Ls, Cg, epsilonSs, thetas):
-    N = len(Ls)
-    w_j_s = 1 / np.sqrt(Ls * Cs)
-
-    def _make_cell(L, wj, Cg_i, eps, theta):
-        def Zs0_fn(omega):
-            return 1j * omega * L
-
-            # return 1j * omega * L / (1 - omega**2 / wj**2)
-
-        def Yg0_fn(omega):
-            return 1j * omega * Cg_i
-
-        def Zs_num_fn(m, omega):
-            if m == 1:
-                return Zs0_fn(omega) * eps / (1 - omega**2 / wj**2)
-            return 0j
-
-        return dict(
-            Zs0_fn=Zs0_fn,
-            Yg0_fn=Yg0_fn,
-            theta_val=theta,
-            Zs_num_fn=Zs_num_fn,
-            Yg_num_fn=lambda m, omega: 0j,
+def prepare_immitances(Cs, Ls, Cg, epsilons, thetas) -> list[CellImmitance]:
+    wj = 1 / np.sqrt(Ls * Cs)
+    return [
+        CellImmitance(
+            theta=thetas[i],
+            Zs0_fn=lambda w, L=Ls[i]: 1j * w * L,
+            Yg0_fn=lambda w, C=Cg[i]: 1j * w * C,
+            Zs_harm_fn=lambda m, w, L=Ls[i], wj_i=wj[i], eps=epsilons[i]: (
+                1j * w * L * eps / (1 - w**2 / wj_i**2) if m == 1 else 0j * w
+            ),
+            Yg_harm_fn=lambda m, w: 0j * w,
         )
+        for i in range(len(Ls))
+    ]
 
-    return [_make_cell(Ls[i], w_j_s[i], Cg[i], epsilonSs[i], thetas[i]) for i in range(N)]
 
 if __name__ == "__main__":
     main()

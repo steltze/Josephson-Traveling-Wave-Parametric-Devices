@@ -139,7 +139,7 @@ class ABCDMatrix:
         data = np.asarray(data, dtype=complex)
         if data.ndim != 4 or data.shape[2] != data.shape[3]:
             raise ValueError(f"data must be (Nf, Nc, N, N), got {data.shape}")
-        
+
         if data.shape[1] == 1:
             return cls(data)
         else:
