@@ -99,9 +99,7 @@ class ABCDMatrix:
         """
         data = np.asarray(data, dtype=complex)
         if data.ndim != 4 or data.shape[2] != data.shape[3]:
-            raise ValueError(
-                f"data must be (Nf, Nc, N, N), got {data.shape}"
-            )
+            raise ValueError(f"data must be (Nf, Nc, N, N), got {data.shape}")
         result = data[:, 0]
         for c in range(1, data.shape[1]):
             result = result @ data[:, c]
@@ -120,6 +118,7 @@ class ABCDMatrix:
         SMatrix of shape (Nf, N, N)
         """
         from src.solver.s_matrix import SMatrix
+
         return SMatrix.from_ABCD(self._data, Z0)
 
     def __repr__(self) -> str:

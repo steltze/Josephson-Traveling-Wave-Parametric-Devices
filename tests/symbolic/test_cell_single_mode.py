@@ -175,7 +175,6 @@ class TestSymbolicTransferMatrix:
         )
         return T_sym, state_syms
 
-
     def test_shape_M0_N0(self, T_M0_N0):
         T_sym, _ = T_M0_N0
         assert T_sym.shape == (2, 2)
@@ -183,7 +182,6 @@ class TestSymbolicTransferMatrix:
     def test_shape_M1_N1(self, T_M1_N1):
         T_sym, _ = T_M1_N1
         assert T_sym.shape == (4, 4)
-
 
     def test_M0_T00_is_one(self, T_M0_N0):
         T_sym, _ = T_M0_N0
@@ -206,7 +204,6 @@ class TestSymbolicTransferMatrix:
         T_sym, _ = T_M0_N0
         det = T_sym[0, 0] * T_sym[1, 1] - T_sym[0, 1] * T_sym[1, 0]
         assert simplify(expand(det) - 1) == 0
-
 
     def test_M1_diagonal_voltage_rows_are_one(self, T_M1_N1):
         """T[0,0] and T[2,2] are both 1 (V[j,n] -> V[j,n+1] direct coupling)."""
@@ -317,7 +314,6 @@ class TestNumericalMatrix:
     def test_dtype_is_complex(self, T_num_M1_N1):
         assert np.issubdtype(T_num_M1_N1.dtype, np.complexfloating)
 
-
     def test_T00_real_is_one(self, T_num_M1_N1):
         assert T_num_M1_N1[0, 0].real == pytest.approx(1.0, abs=1e-10)
 
@@ -357,7 +353,6 @@ class TestNumericalMatrix:
 
     def test_T33_real(self, T_num_M1_N1):
         assert T_num_M1_N1[3, 3].real == pytest.approx(1.508, abs=1e-3)
-
 
     def test_M0_determinant_is_one(self, T_num_M0_N0):
         """2x2 matrix with purely real Zs0, Yg0 must have det = 1."""
