@@ -49,8 +49,8 @@ def plot_s_parameters(
 
     x = freqs / freq_scale
     for i, j in params:
-        db = 20.0 * np.log10(np.abs(S_matrix[:, i, j]))
-        ax.plot(x, db, label=f"S_matrix{i + 1}{j + 1}")
+        db = 20.0 * np.log10(np.abs(S_matrix[:, i-1, j-1]))
+        ax.plot(x, db, label=f"S{i}{j}")
 
     ax.set_xlabel(freq_label)
     ax.set_ylabel("Magnitude (dB)")

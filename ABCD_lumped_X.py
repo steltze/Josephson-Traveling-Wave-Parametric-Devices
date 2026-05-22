@@ -316,9 +316,9 @@ if disorder:
     Cgs *= np.random.uniform(1 - disorderSpan / 2, 1 + disorderSpan / 2, Lss.shape[0])
 
 
-ws = freqs * 2 * np.pi
-wd = ws + w_p
-freqsd = wd / 2 / np.pi
+# ws = freqs * 2 * np.pi
+# wd = ws + w_p
+# freqsd = wd / 2 / np.pi
 
 
 out = Line(Lss, Css, Cgs, Cis, Z0, thetas, epsilonSs).forward(2 * np.pi * freqs)
