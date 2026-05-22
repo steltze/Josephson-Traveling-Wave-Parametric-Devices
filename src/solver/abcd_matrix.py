@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
+
+if TYPE_CHECKING:
+    from solver.s_matrix import SMatrix
 
 
 class ABCDMatrix:
@@ -79,6 +84,40 @@ class ABCDMatrix:
         if sliced.ndim == 2:
             sliced = sliced[None]
         return ABCDMatrix(sliced)
+
+    @classmethod
+    def from_cell_grid_S(cls, data: np.ndarray, Z0: float = 50.0) -> "SMatrix":
+        """
+        Convert a (Nf, Nc, N, N) transfer-matrix grid to a cascaded SMatrix.
+
+        Each cell T maps the state left→right; it is inverted here to obtain
+        the standard ABCD convention before conversion to S-parameters.
+        Cells are then cascaded left-to-right via the Redheffer star product.
+
+        Parameters
+        ----------
+        data : ndarray, shape (Nf, Nc, N, N)
+        Z0   : reference impedance in ohms (default 50)
+
+        Returns
+        -------
+        SMatrix of shape (Nf, N, N)
+        """
+        from solver.s_matrix import SMatrix, ABCD_to_S, redheffer_star
+
+        data = np.asarray(data, dtype=complex)
+        if data.ndim != 4 or data.shape[2] != data.shape[3]:
+            raise ValueError(f"data must be (Nf, Nc, N, N), got {data.shape}")
+        Nf, Nc, N, _ = data.shape
+
+        M_flat = np.linalg.inv(data.reshape(Nf * Nc, N, N))
+        S_flat = ABCD_to_S(M_flat, Z0)
+        S_grid = S_flat.reshape(Nf, Nc, N, N)
+
+        S_total = S_grid[:, 0]
+        for c in range(1, Nc):
+            S_total = redheffer_star(S_grid[:, c], S_total)
+        return SMatrix(S_total, Z0)
 
     @classmethod
     def from_cell_grid(cls, data: np.ndarray) -> "ABCDMatrix":

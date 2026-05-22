@@ -10,7 +10,7 @@ def main():
     Z0 = 50
 
     ### signal frequency span
-    freqs = np.linspace(0.5e9, 12e9, 10)
+    freqs = np.linspace(0.5e9, 150e9, 100)
 
     ## add disorder to the values of L's and C's
     disorder = True
@@ -20,12 +20,12 @@ def main():
     a = 10e-6
 
     # number of cells
-    ncell = 1
+    ncell = 200
     ns = np.arange(ncell)
     M, ks_state = 1, [0, 1]
-    epsilon = 0.2
+    epsilon = 0.0
 
-    w_s = 50e9 * 2 * np.pi  # signal frequency
+    w_s = 50e9 * 2 * np.pi  # cutoff signal frequency
     w_j = 30e9 * 2 * np.pi  # junction plasma frequency
     w_ss = w_s * np.ones(ncell)
     w_js = w_j * np.ones(ncell)
@@ -42,7 +42,9 @@ def main():
     w_p = v_s / v_p * w_c * 1 / k
 
     if w_p < 0:
-        print("!! w_p is negative !!")
+        raise ValueError(
+            "!! w_p is negative !!"
+        )
 
     ### array defining local pump velocity within the line (center velocity : conversion matched at w_c)
     xmax = 0.95
@@ -87,19 +89,32 @@ def main():
         )
 
     cell = CellSingleMode()
+    import time
+    start_time = time.time()
     T_sym, state_syms, Zs_m, Yg_m = cell.build_symbolic_transfer_matrix(M, ks_state)
+    print(f"---[1] {(time.time() - start_time):0.4f} seconds ---")
+
     dim = len(state_syms)
 
+    start_time = time.time()
     freq_params_list = [_make_freq_params(f * 2 * np.pi, w_p) for f in freqs]
+    cell_params = prepare_immitances(Css, Lss, Cgs, epsilonSs, thetas)
+    print(f"---[2] {(time.time() - start_time):0.4f} seconds ---")
 
-    cell_params = prepare_immitances(Css, Lss, Cgs, epsilonSs, w_s, thetas)
+
+    start_time = time.time()
     T_grid = cell.build_cell_freq_matrices(
         T_sym, dim, M, ks_state, Zs_m, Yg_m, cell_params, freq_params_list
     )
+    print(f"---[3] {(time.time() - start_time):0.4f} seconds ---")
 
-    cascaded_S_matrix = ABCDMatrix.from_cell_grid(T_grid).to_S(Z0=Z0)
-    print(cascaded_S_matrix.array)
+
+    start_time = time.time()
+    cascaded_S_matrix = ABCDMatrix.from_cell_grid_S(T_grid, Z0=Z0)
     ax = plot_s_parameters(cascaded_S_matrix.array, freqs, [(1,1), (1,2), (2,1), (2, 2)])
+    print(f"---[4] {(time.time() - start_time):0.4f} seconds ---")
+
+
     plt.show()
     
     return
@@ -113,24 +128,33 @@ def _make_freq_params(omega_s, omega_p):
     )
 
 
-def prepare_immitances(Cs, Ls, Cg, epsilonSs, w_s, thetas):
+def prepare_immitances(Cs, Ls, Cg, epsilonSs, thetas):
     N = len(Ls)
     w_j_s = 1 / np.sqrt(Ls * Cs)
-    Zs0 = 1j * w_s * Ls / (1 - w_s**2 / w_j_s**2)
-    Zs1 = Zs0 * epsilonSs / (1 - w_s**2 / w_j_s**2)  ### order 1 in epsilon
-    Yg0 = 1j * w_s * Cg
 
-    cell_params = [
-        dict(
-            Zs0_val=Zs0[i],
-            Yg0_val=Yg0[i],
-            theta_val=thetas[i],
-            Zs_num_fn=lambda m, _, _z=Zs1[i]: {1: _z}.get(m, 0j),
-            Yg_num_fn=lambda m, _: 0j,
+    def _make_cell(L, wj, Cg_i, eps, theta):
+        def Zs0_fn(omega):
+            return 1j * omega * L
+
+            # return 1j * omega * L / (1 - omega**2 / wj**2)
+
+        def Yg0_fn(omega):
+            return 1j * omega * Cg_i
+
+        def Zs_num_fn(m, omega):
+            if m == 1:
+                return Zs0_fn(omega) * eps / (1 - omega**2 / wj**2)
+            return 0j
+
+        return dict(
+            Zs0_fn=Zs0_fn,
+            Yg0_fn=Yg0_fn,
+            theta_val=theta,
+            Zs_num_fn=Zs_num_fn,
+            Yg_num_fn=lambda m, omega: 0j,
         )
-        for i in range(N)
-    ]
-    return cell_params
+
+    return [_make_cell(Ls[i], w_j_s[i], Cg[i], epsilonSs[i], thetas[i]) for i in range(N)]
 
 if __name__ == "__main__":
     main()

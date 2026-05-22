@@ -10,8 +10,9 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from sympy import Add, Expr, Function, IndexedBase, Matrix, expand, exp, symbols, zeros
+from sympy import Add, Expr, Function, Indexed, IndexedBase, Matrix, expand, exp, symbols, zeros
 from sympy import I
+from sympy.core.function import AppliedUndef
 
 
 class CellSingleMode:
@@ -24,6 +25,7 @@ class CellSingleMode:
         self.V = IndexedBase("V")
         self.Ic = IndexedBase("I")
         self.xi = symbols("xi")
+        self._lambdify_cache: dict = {}
 
     def _fourier_basis(self, m: int) -> Expr:
         """Return the m-th basis element exp(I*m*omega_p*t)."""
@@ -171,6 +173,35 @@ class CellSingleMode:
         T_sym, state_syms = self._build_transfer_matrix(M, ks_state, results)
         return T_sym, state_syms, Zs_m, Yg_m
 
+    def _build_evaluator(self, T_sym: Matrix) -> tuple:
+        """
+        Compile T_sym into a fast lambdified function, cache by matrix id.
+
+        Replaces all AppliedUndef (e.g. Zs1(omega[-2])), Indexed (e.g.
+        omega[-2]), and scalar free symbols with Dummy variables, then calls
+        lambdify once.  Subsequent calls with the same T_sym object skip
+        compilation entirely.
+        """
+        from sympy import Dummy, lambdify
+
+        applied = sorted(T_sym.atoms(AppliedUndef), key=str)
+        indexed = sorted(T_sym.atoms(Indexed), key=str)
+        indexed_base_names = {str(ix.base) for ix in indexed}
+        scalars = sorted(
+            [
+                s for s in T_sym.free_symbols
+                if not isinstance(s, IndexedBase) and str(s) not in indexed_base_names
+            ],
+            key=str,
+        )
+        keys = applied + indexed + scalars
+        dummies = [Dummy() for _ in keys]
+        T_replaced = T_sym.xreplace(dict(zip(keys, dummies)))
+        fn = lambdify(dummies, T_replaced.tolist(), modules="numpy")
+        entry = (fn, keys)
+        self._lambdify_cache[id(T_sym)] = entry
+        return entry
+
     def build_numeric_matrix(
         self,
         T_sym: Matrix,
@@ -179,8 +210,8 @@ class CellSingleMode:
         ks_state: list[int],
         Zs_m: list[type[Function]],
         Yg_m: list[type[Function]],
-        Zs0_val: complex,
-        Yg0_val: complex,
+        Zs0_fn: Callable[[float], complex],
+        Yg0_fn: Callable[[float], complex],
         theta_val: float,
         omega_p_val: float,
         omega_val_fn: Callable[[int], float],
@@ -198,8 +229,8 @@ class CellSingleMode:
         M            : Floquet truncation order
         ks_state     : list of sideband indices
         Zs_m, Yg_m  : harmonic Function objects from _make_harmonic_functions
-        Zs0_val      : complex, DC series impedance
-        Yg0_val      : complex, DC shunt admittance
+        Zs0_fn       : callable  omega -> complex  (DC series impedance)
+        Yg0_fn       : callable  omega -> complex  (DC shunt admittance)
         theta_val    : float, pump phase
         omega_p_val  : float, pump angular frequency
         omega_val_fn : callable  q -> float  (carrier frequency of mode q)
@@ -209,31 +240,38 @@ class CellSingleMode:
 
         Returns
         -------
-        T_num : numpy ndarray, shape (dim, dim), dtype complex
+        T_num : numpy ndarray, shape (dim, dim), dtype complex, in standard ABCD
+                block order [V[k0], V[k1], ..., I[k0], I[k1], ...]
         """
         N_max = max(abs(_k) for _k in ks_state) if ks_state else 0
         k_range = range(k_val - (N_max + 2 * M), k_val + (N_max + 2 * M) + 1)
 
+        omega_center = omega_val_fn(k_val)
         subs = {
             self.theta: theta_val,
-            self.Zs0: Zs0_val,
-            self.Yg0: Yg0_val,
+            self.Zs0: Zs0_fn(omega_center),
+            self.Yg0: Yg0_fn(omega_center),
             self.omega_p: omega_p_val,
             self.k: k_val,
         }
 
         for _k in k_range:
-            subs[self.omega[_k]] = omega_val_fn(_k)
+            omega_k = omega_val_fn(_k)
+            subs[self.omega[_k]] = omega_k
             for mi, Zm in enumerate(Zs_m, start=1):
-                subs[Zm(self.omega[_k])] = Zs_num_fn(mi, self.omega[_k])
+                subs[Zm(self.omega[_k])] = Zs_num_fn(mi, omega_k)
             for mi, Ym in enumerate(Yg_m, start=1):
-                subs[Ym(self.omega[_k])] = Yg_num_fn(mi, self.omega[_k])
+                subs[Ym(self.omega[_k])] = Yg_num_fn(mi, omega_k)
 
-        T_num = np.zeros((dim, dim), dtype=complex)
-        for i in range(dim):
-            for j in range(dim):
-                T_num[i, j] = complex(T_sym[i, j].subs(subs))
-        return T_num
+        if id(T_sym) not in self._lambdify_cache:
+            self._build_evaluator(T_sym)
+        fn, keys = self._lambdify_cache[id(T_sym)]
+        T_num = np.array(fn(*[subs[_k] for _k in keys]), dtype=complex)
+
+        # Reorder from interleaved [V[k0],I[k0],V[k1],I[k1],...] to grouped
+        # [V[k0],V[k1],...,I[k0],I[k1],...] so ABCD block structure is standard.
+        perm = list(range(0, dim, 2)) + list(range(1, dim, 2))
+        return T_num[np.ix_(perm, perm)]
 
     def build_cell_freq_matrices(
         self,
