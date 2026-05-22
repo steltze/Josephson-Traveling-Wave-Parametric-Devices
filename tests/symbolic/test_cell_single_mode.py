@@ -206,24 +206,25 @@ class TestSymbolicTransferMatrix:
         assert simplify(expand(det) - 1) == 0
 
     def test_M1_diagonal_voltage_rows_are_one(self, T_M1_N1):
-        """T[0,0] and T[2,2] are both 1 (V[j,n] -> V[j,n+1] direct coupling)."""
+        """T[0,0] and T[1,1] are both 1 (V[j,n] -> V[j,n+1] direct coupling)."""
         T_sym, _ = T_M1_N1
         assert T_sym[0, 0] == 1
-        assert T_sym[2, 2] == 1
+        assert T_sym[1, 1] == 1
 
     def test_M1_voltage_rows_have_no_V_cross_coupling(self, T_M1_N1):
-        """V[0,n+1] does not depend on V[1,n] (T[0,2] = 0)."""
+        """V[0,n+1] does not depend on V[1,n] (T[0,1] = 0)."""
         T_sym, _ = T_M1_N1
-        assert T_sym[0, 2] == 0
+        assert T_sym[0, 1] == 0
 
-    def test_M1_T01_is_minus_Zs0(self, T_M1_N1):
+    def test_M1_T02_is_minus_Zs0(self, T_M1_N1):
+        """V[0,n+1] coefficient of I[0,n] is -Zs0 (T[0,2])."""
         T_sym, _ = T_M1_N1
-        assert simplify(T_sym[0, 1] + self.Zs0) == 0
+        assert simplify(T_sym[0, 2] + self.Zs0) == 0
 
-    def test_M1_T23_is_minus_Zs0(self, T_M1_N1):
-        """Same -Zs0 appears in the second voltage row."""
+    def test_M1_T13_is_minus_Zs0(self, T_M1_N1):
+        """Same -Zs0 appears in the second voltage row (T[1,3])."""
         T_sym, _ = T_M1_N1
-        assert simplify(T_sym[2, 3] + self.Zs0) == 0
+        assert simplify(T_sym[1, 3] + self.Zs0) == 0
 
     def test_M1_current_row0_no_Zs2_terms(self, T_M1_N1):
         """With M=1, Zs2 should not appear anywhere in the matrix."""
@@ -232,11 +233,11 @@ class TestSymbolicTransferMatrix:
         assert not T_sym.has(Zs2)
 
     def test_state_syms_ordering(self, T_M1_N1):
-        """State vector is interleaved: [V[0,n], I[0,n], V[1,n], I[1,n]]."""
+        """State vector is grouped: [V[0,n], V[1,n], I[0,n], I[1,n]]."""
         _, state_syms = T_M1_N1
         assert state_syms[0] == self.V[0, self.n]
-        assert state_syms[1] == self.Ic[0, self.n]
-        assert state_syms[2] == self.V[1, self.n]
+        assert state_syms[1] == self.V[1, self.n]
+        assert state_syms[2] == self.Ic[0, self.n]
         assert state_syms[3] == self.Ic[1, self.n]
 
 
@@ -272,8 +273,8 @@ def T_num_M1_N1():
         ks_state,
         Zs_m,
         Yg_m,
-        _ZS0,
-        _YG0,
+        lambda omega: _ZS0,
+        lambda omega: _YG0,
         _THETA,
         _OMEGA_P,
         _omega_val,
@@ -296,8 +297,8 @@ def T_num_M0_N0():
         ks_state,
         Zs_m,
         Yg_m,
-        _ZS0,
-        _YG0,
+        lambda omega: _ZS0,
+        lambda omega: _YG0,
         _THETA,
         _OMEGA_P,
         _omega_val,
@@ -317,39 +318,42 @@ class TestNumericalMatrix:
     def test_T00_real_is_one(self, T_num_M1_N1):
         assert T_num_M1_N1[0, 0].real == pytest.approx(1.0, abs=1e-10)
 
-    def test_T01_real_is_minus_Zs0(self, T_num_M1_N1):
-        assert T_num_M1_N1[0, 1].real == pytest.approx(-_ZS0.real, abs=1e-6)
+    def test_T01_is_zero(self, T_num_M1_N1):
+        # V[0,n+1] has no direct coupling to V[1,n]
+        assert abs(T_num_M1_N1[0, 1]) == pytest.approx(0.0, abs=1e-10)
 
-    def test_T02_is_zero(self, T_num_M1_N1):
-        assert abs(T_num_M1_N1[0, 2]) == pytest.approx(0.0, abs=1e-10)
+    def test_T02_real_is_minus_Zs0(self, T_num_M1_N1):
+        # V[0,n+1] = ... - Zs0*I[0,n] - ...
+        assert T_num_M1_N1[0, 2].real == pytest.approx(-_ZS0.real, abs=1e-6)
 
     def test_T03_real(self, T_num_M1_N1):
         # -Zs1(omega[1])*exp(-I*theta) real part ≈ -0.106066
         assert T_num_M1_N1[0, 3].real == pytest.approx(-0.106066, abs=1e-4)
 
-    def test_T10_real(self, T_num_M1_N1):
-        assert T_num_M1_N1[1, 0].real == pytest.approx(-_YG0.real, abs=1e-6)
+    def test_T11_real_is_one(self, T_num_M1_N1):
+        assert T_num_M1_N1[1, 1].real == pytest.approx(1.0, abs=1e-10)
 
-    def test_T11_real(self, T_num_M1_N1):
-        # Yg0*Zs0 + 2*Yg1(omega[0])*Zs1(omega[0]) + 1, real part ≈ 1.508
-        assert T_num_M1_N1[1, 1].real == pytest.approx(1.508, abs=1e-3)
-
-    def test_T21_real(self, T_num_M1_N1):
+    def test_T12_real(self, T_num_M1_N1):
         # -Zs1(omega[0])*exp(I*theta) real part ≈ -0.035355
-        assert T_num_M1_N1[2, 1].real == pytest.approx(-0.035355, abs=1e-4)
+        assert T_num_M1_N1[1, 2].real == pytest.approx(-0.035355, abs=1e-4)
 
-    def test_T22_real_is_one(self, T_num_M1_N1):
-        assert T_num_M1_N1[2, 2].real == pytest.approx(1.0, abs=1e-10)
+    def test_T13_real_is_minus_Zs0(self, T_num_M1_N1):
+        assert T_num_M1_N1[1, 3].real == pytest.approx(-_ZS0.real, abs=1e-6)
 
-    def test_T23_real_is_minus_Zs0(self, T_num_M1_N1):
-        assert T_num_M1_N1[2, 3].real == pytest.approx(-_ZS0.real, abs=1e-6)
+    def test_T20_real(self, T_num_M1_N1):
+        # I[0,n+1] = -Yg0*V[0,n+1] + ... → -Yg0 coefficient on V[0,n]
+        assert T_num_M1_N1[2, 0].real == pytest.approx(-_YG0.real, abs=1e-6)
+
+    def test_T22_real(self, T_num_M1_N1):
+        # Yg0*Zs0 + 2*Yg1(omega[0])*Zs1(omega[0]) + 1, real part ≈ 1.508
+        assert T_num_M1_N1[2, 2].real == pytest.approx(1.508, abs=1e-3)
 
     def test_T30_real(self, T_num_M1_N1):
         # -Yg1(omega[0])*exp(I*theta) real part ≈ -0.021213
         assert T_num_M1_N1[3, 0].real == pytest.approx(-0.021213, abs=1e-4)
 
-    def test_T32_real(self, T_num_M1_N1):
-        assert T_num_M1_N1[3, 2].real == pytest.approx(-_YG0.real, abs=1e-6)
+    def test_T31_real(self, T_num_M1_N1):
+        assert T_num_M1_N1[3, 1].real == pytest.approx(-_YG0.real, abs=1e-6)
 
     def test_T33_real(self, T_num_M1_N1):
         assert T_num_M1_N1[3, 3].real == pytest.approx(1.508, abs=1e-3)
@@ -383,14 +387,14 @@ _THETA_FOR_FREQ = [0.0, np.pi / 6, np.pi / 3, np.pi / 2]  # one theta per freq p
 # Two cells with distinct impedance/admittance profiles
 _CELL_PARAMS = [
     dict(
-        Zs0_val=1.0 + 0.0j,
-        Yg0_val=0.5 + 0.0j,
+        Zs0_fn=lambda omega: 1.0 + 0.0j,
+        Yg0_fn=lambda omega: 0.5 + 0.0j,
         Zs_num_fn=lambda m, _: {1: 0.10 + 0.05j}.get(m, 0j),
         Yg_num_fn=lambda m, _: {1: 0.05 + 0.02j}.get(m, 0j),
     ),
     dict(
-        Zs0_val=1.5 + 0.0j,
-        Yg0_val=0.3 + 0.0j,
+        Zs0_fn=lambda omega: 1.5 + 0.0j,
+        Yg0_fn=lambda omega: 0.3 + 0.0j,
         Zs_num_fn=lambda m, _: {1: 0.20 + 0.03j}.get(m, 0j),
         Yg_num_fn=lambda m, _: {1: 0.08 + 0.01j}.get(m, 0j),
     ),

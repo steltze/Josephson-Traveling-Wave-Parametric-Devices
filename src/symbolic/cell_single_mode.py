@@ -133,9 +133,11 @@ class CellSingleMode:
         T_sym      : sympy Matrix of shape (2*len(ks_state), 2*len(ks_state))
         state_syms : list of state symbols in row/column order
         """
-        state_syms = []
-        for _k in ks_state:
-            state_syms += [self.V[_k, self.n], self.Ic[_k, self.n]]
+        n_modes = len(ks_state)
+        state_syms = (
+            [self.V[_k, self.n] for _k in ks_state]
+            + [self.Ic[_k, self.n] for _k in ks_state]
+        )
         dim = len(state_syms)
 
         ms_full = list(range(-2 * M, 2 * M + 1))
@@ -145,8 +147,8 @@ class CellSingleMode:
             cv_p = expand(Add(*[results[m][0].subs(self.k, _k) for m in ms_full]))
             ci_p = expand(Add(*[results[m][1].subs(self.k, _k) for m in ms_full]))
             for col_idx, s in enumerate(state_syms):
-                T_sym[2 * row_idx, col_idx] = cv_p.coeff(s)
-                T_sym[2 * row_idx + 1, col_idx] = ci_p.coeff(s)
+                T_sym[row_idx, col_idx] = cv_p.coeff(s)
+                T_sym[n_modes + row_idx, col_idx] = ci_p.coeff(s)
 
         return T_sym, state_syms
 
@@ -266,12 +268,7 @@ class CellSingleMode:
         if id(T_sym) not in self._lambdify_cache:
             self._build_evaluator(T_sym)
         fn, keys = self._lambdify_cache[id(T_sym)]
-        T_num = np.array(fn(*[subs[_k] for _k in keys]), dtype=complex)
-
-        # Reorder from interleaved [V[k0],I[k0],V[k1],I[k1],...] to grouped
-        # [V[k0],V[k1],...,I[k0],I[k1],...] so ABCD block structure is standard.
-        perm = list(range(0, dim, 2)) + list(range(1, dim, 2))
-        return T_num[np.ix_(perm, perm)]
+        return np.array(fn(*[subs[_k] for _k in keys]), dtype=complex)
 
     def build_cell_freq_matrices(
         self,
