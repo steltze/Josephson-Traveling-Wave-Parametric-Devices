@@ -4,11 +4,7 @@ The transfer matrix T maps the state vector [V[k,n], I[k,n]] -> [V[k,n+1], I[k,n
 """
 
 from __future__ import annotations
-
-from collections.abc import Callable
-from dataclasses import dataclass
 from pathlib import Path
-
 import numpy as np
 from sympy import (
     Add,
@@ -21,18 +17,11 @@ from sympy import (
     exp,
     symbols,
     zeros,
+    I,
 )
-from sympy import I
 from sympy.core.function import AppliedUndef
 
-
-@dataclass
-class CellImmitance:
-    theta: float
-    Zs0_fn: Callable  # omega -> complex
-    Yg0_fn: Callable  # omega -> complex
-    Zs_harm_fn: Callable  # (m: int, omega) -> complex  (m-th Fourier coeff of Zs)
-    Yg_harm_fn: Callable  # (m: int, omega) -> complex
+from models.cell import CellImmitance
 
 
 class CellSingleMode:
@@ -40,8 +29,8 @@ class CellSingleMode:
         self.t, self.theta, self.omega_p = symbols("t theta omega_p", real=True)
         self.k, self.n = symbols("k n", integer=True)
         self.omega = IndexedBase("omega")
-        self.Zs0 = symbols("Zs0", complex=True)
-        self.Yg0 = symbols("Yg0", complex=True)
+        self.Zs0 = Function("Zs0")
+        self.Yg0 = Function("Yg0")
         self.V = IndexedBase("V")
         self.Ic = IndexedBase("I")
         self.xi = symbols("xi")
@@ -66,7 +55,7 @@ class CellSingleMode:
         The placeholder xi is later substituted with omega[k] when extracting
         harmonic coefficients.
         """
-        impedance = self.Zs0
+        impedance = self.Zs0(self.xi)
         for mi, Zm in enumerate(Zs_m, start=1):
             impedance += Zm(self.xi) * self._fourier_basis(mi) * exp(
                 I * mi * self.theta
@@ -75,7 +64,7 @@ class CellSingleMode:
 
     def _build_Yg_shunt(self, Yg_m: list[type[Function]]) -> Expr:
         """Return the symbolic Yg(t) Fourier series up to order M."""
-        admittance = self.Yg0
+        admittance = self.Yg0(self.xi)
         for mi, Ym in enumerate(Yg_m, start=1):
             admittance += Ym(self.xi) * self._fourier_basis(mi) * exp(
                 I * mi * self.theta
@@ -246,17 +235,16 @@ class CellSingleMode:
         """
         N_max = max(abs(_k) for _k in ks_state) if ks_state else 0
         k_range = range(k_val - (N_max + 2 * M), k_val + (N_max + 2 * M) + 1)
-        omega_center = omega_val_fn(k_val)
 
         subs = {
             self.theta: cell.theta,
-            self.Zs0: cell.Zs0_fn(omega_center),
-            self.Yg0: cell.Yg0_fn(omega_center),
             self.omega_p: omega_p_val,
         }
         for _k in k_range:
             omega_k = omega_val_fn(_k)
             subs[self.omega[_k]] = omega_k
+            subs[self.Zs0(self.omega[_k])] = cell.Zs0_fn(omega_k)
+            subs[self.Yg0(self.omega[_k])] = cell.Yg0_fn(omega_k)
             for mi, Zm in enumerate(Zs_m, start=1):
                 subs[Zm(self.omega[_k])] = cell.Zs_harm_fn(mi, omega_k)
             for mi, Ym in enumerate(Yg_m, start=1):
@@ -275,7 +263,7 @@ class CellSingleMode:
         ks_state: list[int],
         Zs_m: list[type[Function]],
         Yg_m: list[type[Function]],
-        freqs: np.ndarray,
+        w_s: np.ndarray,
         w_p: float,
         cells: list[CellImmitance],
     ) -> np.ndarray:
@@ -290,8 +278,8 @@ class CellSingleMode:
         -------
         T_grid : np.ndarray, shape (Nf, Nc, dim, dim), dtype complex
         """
-        freqs = np.asarray(freqs)
-        Nf, Nc = len(freqs), len(cells)
+        w_s = np.asarray(w_s)
+        Nf, Nc = len(w_s), len(cells)
         T_grid = np.empty((Nf, Nc, dim, dim), dtype=complex)
 
         N_max = max(abs(k) for k in ks_state) if ks_state else 0
@@ -305,20 +293,20 @@ class CellSingleMode:
         for c, cell in enumerate(cells):
             subs = {
                 self.theta: cell.theta,
-                self.Zs0: cell.Zs0_fn(freqs),
-                self.Yg0: cell.Yg0_fn(freqs),
                 self.omega_p: w_p,
             }
             for k in k_range:
-                omega_k = freqs + k * w_p
+                omega_k = w_s + k * w_p
                 subs[self.omega[k]] = omega_k
+                subs[self.Zs0(self.omega[k])] = cell.Zs0_fn(omega_k)
+                subs[self.Yg0(self.omega[k])] = cell.Yg0_fn(omega_k)
                 for mi, Zm in enumerate(Zs_m, start=1):
                     subs[Zm(self.omega[k])] = cell.Zs_harm_fn(mi, omega_k)
                 for mi, Ym in enumerate(Yg_m, start=1):
                     subs[Ym(self.omega[k])] = cell.Yg_harm_fn(mi, omega_k)
 
             # fn returns dim×dim nested list; entries may be scalar for constant
-            # matrix elements — add zeros to broadcast all entries to shape (Nf,)
+            # matrix elements, add zeros to broadcast all entries to shape (Nf,)
             raw = fn(*[subs[k] for k in keys])
             T_grid[:, c] = np.array(
                 [[e + zeros for e in row] for row in raw], dtype=complex
