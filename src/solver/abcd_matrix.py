@@ -30,7 +30,15 @@ class ABCDMatrix:
         #         f"data must be (N, N) or (Nf, N, N) with N even, got {data.shape}"
         #     )
         self._data = data
+        
 
+    def cascade(self):
+        _, Nc, _, _ = self._data.shape
+        ABCD_total = self._data[:, 0]
+        for c in range(1, Nc):
+            ABCD_total = ABCD_total[:, c] @ ABCD_total
+        return ABCD_total
+     
     @property
     def array(self) -> np.ndarray:
         """Underlying (Nf, N, N) array."""
@@ -163,6 +171,43 @@ class ABCDMatrix:
         from solver.s_matrix import SMatrix
 
         return SMatrix.from_ABCD(self._data, Z0)
+
+    def dispersion_relation(self) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Bloch dispersion for a 2x2 unit cell via the half-trace formula.
+
+        Implements Eq. 24 of Malnou (arXiv:2510.24753):
+            k = sgn(Im{C_ABCD}) · Im{arccosh((A + D) / 2)}
+
+        Call this on a SINGLE unit cell, not the full cascaded matrix.
+        For multi-mode systems (N > 2) use bloch_wavenumbers() instead.
+
+        Returns
+        -------
+        alpha : (Nf,) attenuation per cell
+        k     : (Nf,) wavenumber in rad/cell, forward-propagating branch
+        """
+        from analysis.dispersion_relation import two_port_dispersion
+
+        return two_port_dispersion(self)
+
+    def bloch_wavenumbers(self) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Bloch propagation constants for an N×N unit cell via eigenvalue decomposition.
+
+        Works for both 2×2 (single mode) and larger matrices (coupled sidebands).
+        Each eigenvalue λ_i of T gives γ_i = −log(λ_i) = α_i + j·k_i.
+
+        Call this on a SINGLE unit cell, not the full cascaded matrix.
+
+        Returns
+        -------
+        alpha : (Nf, N) attenuation per cell, sorted descending by k
+        k     : (Nf, N) wavenumber in rad/cell, sorted descending
+        """
+        from analysis.dispersion_relation import bloch_wavenumbers
+
+        return bloch_wavenumbers(self)
 
     def __repr__(self) -> str:
         return f"ABCDMatrix(shape={self.shape})"
