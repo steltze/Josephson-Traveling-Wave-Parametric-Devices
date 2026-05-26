@@ -132,10 +132,10 @@ def prepare_immitances(Cs, Ls, Cg, epsilons, thetas) -> list[CellImmitance]:
     return [
         CellImmitance(
             theta=thetas[i],
-            Zs0_fn=lambda w, L=(0 if i==0 else Ls[i]), wj_i=wj[i]: 1j * w * L,
-            Yg0_fn=lambda w, C=Cg[i] / (2 if i in (0, len(Ls) - 1) else 1): 1j * w * C,
-            Zs_harm_fn=lambda m, w, L=Ls[i], wj_i=wj[i], eps=epsilons[i]: (
-                1j * w * L * eps / ((1 - w**2 / wj_i**2) ** 2) if m == 1 else 0j * w
+            Zs0_fn=lambda w, L=Ls[i], wj_i=wj[i], i=i: (0.0 if i==0 else 1j * w * L),
+            Yg0_fn=lambda w, C=Cg[i] / (2.0 if i in (0, len(Ls) - 1) else 1.0): 1j * w * C,
+            Zs_harm_fn=lambda m, w, L=Ls[i], wj_i=wj[i], eps=epsilons[i], i=i: (
+                1j * w * L * eps / ((1 - w**2 / wj_i**2) ** 2) if (m == 1 and i!=0) else 0.0
             ),
             Yg_harm_fn=lambda m, w: 0j * w,
         )
