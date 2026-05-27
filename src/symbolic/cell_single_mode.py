@@ -4,6 +4,7 @@ The transfer matrix T maps the state vector [V[k,n], I[k,n]] -> [V[k,n+1], I[k,n
 """
 
 from __future__ import annotations
+from collections.abc import Callable
 from pathlib import Path
 import numpy as np
 from sympy import (
@@ -314,7 +315,7 @@ class CellSingleMode:
 
         return T_grid
 
-    def export_matrix_plot(
+    def export_matrix_graphic(
         self,
         T_sym: Matrix,
         state_syms: list[Expr] | None = None,

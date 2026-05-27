@@ -1,88 +1,82 @@
-"""
-SimulationConfig: single entry point for all simulation parameters.
-"""
-
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import numpy as np
 
 
 @dataclass
 class SimulationConfig:
     """
-    Configuration for a Josephson transmission line simulation.
-
-    The simulator accepts physical circuit parameters and derives everything
-    else.
+    All parameters needed for a TWPA/TWPC simulation.
 
     Parameters
     ----------
+    M : int
+        Floquet truncation order (number of pump harmonics).
+    ks_state : list[int]
+        Sideband indices tracked in the state vector.
+        [0] → single-mode (signal only), [0, 1] → two-mode (signal + idler).
     Z0 : float
-        Port impedance in Ohms. Default 50 Ω.
-
+        Port impedance (Ω).
     ncell : int
-        Number of unit cells. More cells → sharper, deeper isolation gap
-        but slower simulation.
-
-    omega_sigma0 : float
-        Σ mode cutoff angular frequency (rad/s).
-        Sets the signal/idler propagation speed: v_sigma = a * omega_sigma0.
-
-    omega_delta0 : float
-        Δ mode cutoff angular frequency (rad/s).
-        Sets the pump propagation speed: v_delta = a * omega_delta0.
-        If equal to omega_sigma0, Ci = 0 (single-mode limit).
-
-    omega_j0 : float
+        Number of unit cells.
+    cell_size : float
+        Cell length in metres (sets phase velocities).
+    omega_cutoff : float
+        Signal/idler mode cutoff angular frequency (rad/s).
+    omega_j : float
         Junction plasma angular frequency (rad/s).
-        Sets the high-frequency cutoff of the line.
-
-    epsilon_s : float
-        Pump modulation amplitude of series impedance.
-        Convention: L(x,t) = L0 * (1 + 2*epsilon_s*cos(wp*t)).
-
-    epsilon_g : float
-        Pump modulation amplitude of ground admittance.
-
+    epsilon : float
+        Pump modulation depth of the series inductance.
+    omega_c : float
+        Target centre angular frequency for phase matching (rad/s).
     v_ratio : float
-        Ratio v_sigma / v_pump. Controls how slow the pump is relative to the signal.
-
+        v_sigma / v_pump — how much slower the pump is vs the signal.
     freq_min, freq_max : float
-        Frequency sweep range in Hz (not rad/s — for human readability).
-
+        Frequency sweep edges (Hz).
     n_freqs : int
-        Number of frequency points in the sweep.
-
+        Number of frequency points.
+    disorder : bool
+        Add random cell-to-cell parameter disorder.
+    disorder_span : float
+        Fractional spread of the uniform disorder distribution.
+    disorder_seed : int | None
+        RNG seed for reproducibility.
+    nramp : int
+        Number of cells over which the pump amplitude ramps up/down.
+        0 disables the adiabatic envelope.
     """
 
-    # Port impedance
+    # Transfer matrix
+    M: int = 1
+    ks_state: list[int] = field(default_factory=lambda: [0, 1])
+
+    # Port
     Z0: float = 50.0
 
-    # Line geometry
+    # Geometry
     ncell: int = 500
-    cell_size: float = 10e-6  # meters
+    cell_size: float = 10e-6
 
-    # Mode frequencies (rad/s)
-    omega_sigma0: float = 50e9 * 2 * np.pi
-    omega_delta0: float = 50e9 * 2 * np.pi
-    omega_j0: float = 30e9 * 2 * np.pi
+    # Circuit frequencies (rad/s)
+    omega_cutoff: float = 50e9 * 2 * np.pi
+    omega_j: float = 30e9 * 2 * np.pi
 
     # Pump
-    epsilon_s: float = 0.2
-    epsilon_g: float = 0.0
-
+    epsilon: float = 0.0
     omega_c: float = 5e9 * 2 * np.pi
-    v_ratio: float = 3.0  # v_sigma / v_pump
+    v_ratio: float = 3.0
 
-    # Frequency sweep (Hz, not rad/s)
+    # Frequency sweep (Hz)
     freq_min: float = 0.5e9
     freq_max: float = 12e9
-    n_freqs: int = 2000
+    n_freqs: int = 500
 
-    # Random seed for reproducibility (None = random each time)
-    disorder_seed: int | None = None
+    # Disorder
+    disorder: bool = False
+    disorder_span: float = 0.01
+    disorder_seed: int | None = 42
 
-    def __post_init__(self) -> None:
-        """Validate config."""
+    # Adiabatic ramp (0 = flat)
+    nramp: int = 0
 
     @property
     def freqs(self) -> np.ndarray:
@@ -96,34 +90,21 @@ class SimulationConfig:
 
     @property
     def v_sigma(self) -> float:
-        """Σ mode phase velocity (m/s)."""
-        return self.cell_size * self.omega_sigma0
+        """Signal phase velocity (m/s)."""
+        return self.cell_size * self.omega_cutoff
 
     @property
-    def v_delta(self) -> float:
-        """Δ mode phase velocity (m/s)."""
-        return self.cell_size * self.omega_delta0
-
-    @property
-    def v_pump0(self) -> float:
-        """Nominal pump phase velocity (m/s), derived from v_ratio."""
+    def v_pump(self) -> float:
+        """Pump phase velocity (m/s)."""
         return self.v_sigma / self.v_ratio
 
     @property
     def omega_pump(self) -> float:
         """
-        Pump angular frequency derived from phase matching condition at omega_c.
+        Phase-matched pump frequency (rad/s).
 
-        Assumes v_I = v_S.
+        Derived from the continuous-wave phase-matching condition
+        k_p = omega_p / v_p = omega_c / v_sigma * v_ratio, giving
+        omega_p = v_ratio * omega_c.
         """
-        v_s = self.v_sigma
-        v_d = self.v_delta
-        v_p = self.v_pump0
-        omega_p = (v_d / v_s + 1) / (v_d / v_p - 1) * self.omega_c
-        if omega_p < 0:
-            raise ValueError(
-                f"Derived omega_pump={omega_p:.3e} is negative. "
-                "Check v_ratio and omega_c — phase matching may not be achievable "
-                "with these parameters."
-            )
-        return omega_p
+        return self.v_ratio * self.omega_c
