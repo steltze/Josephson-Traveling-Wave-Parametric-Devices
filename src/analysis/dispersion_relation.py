@@ -3,14 +3,11 @@ Dispersion relation extraction from transfer matrices.
 """
 
 from __future__ import annotations
-
 import numpy as np
-
-from solver.abcd_matrix import ABCDMatrix
 
 
 def bloch_wavenumbers(
-    T_cell: ABCDMatrix,
+    T_cell: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Bloch propagation constants for an NxN unit cell via eigenvalue decomposition.
@@ -39,8 +36,8 @@ def bloch_wavenumbers(
     k : ndarray, shape (Nf, N)
         Wavenumber rad/cell (imaginary part of γ_i), sorted descending.
     """
-    eigenvalues = np.linalg.eigvals(T_cell.array)  # (Nf, N)
-    gamma = -np.log(eigenvalues)                    # γ_i = α_i + j·k_i
+    eigenvalues = np.linalg.eigvals(T_cell)  # (Nf, N)
+    gamma = -np.log(eigenvalues)  # γ_i = α_i + j·k_i
     idx = np.argsort(gamma.imag, axis=-1)[:, ::-1]  # descending k
     return (
         np.take_along_axis(gamma.real, idx, axis=-1),
