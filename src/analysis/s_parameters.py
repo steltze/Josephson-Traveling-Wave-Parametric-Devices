@@ -46,7 +46,7 @@ def plot_s_parameters(
 
     if ax is None:
         fig, (ax_mag, ax_phase) = plt.subplots(
-            2, 1, sharex=True, figsize=(8, 6)
+            2, 1, sharex=True, figsize=(12, 8)
         )
     else:
         # If user provides only one axis, create a twin axis for phase

@@ -77,6 +77,17 @@ def main2():
     sim.plot_s_parameters([(1, 1), (2, 1), (3, 1), (4, 1)])
     sim.plot_s_parameters([(1, 1), (1, 2), (1, 3), (1, 4)])
     sim.plot_dispersion_relation()
+
+    omega_signals = cfg.omegas                          # rad/s
+    omega_idlers = omega_signals + cfg.omega_pump       # rad/s
+    S_matrix = np.abs(sim.get_s_matrix().array)
+    check1 = (S_matrix[:, 0, 0]**2
+              + (omega_signals / omega_idlers) * S_matrix[:, 1, 0]**2
+              + S_matrix[:, 2, 0]**2
+              + (omega_signals / omega_idlers) * S_matrix[:, 3, 0]**2)
+    plt.figure()
+    plt.plot(omega_signals, check1)
+    print(check1)
     plt.show()
 
 
