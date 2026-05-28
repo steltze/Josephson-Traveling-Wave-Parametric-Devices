@@ -45,17 +45,40 @@ def plot_s_parameters(
         raise ValueError(f"freqs length {freqs.shape[0]} does not match Nf={Nf}")
 
     if ax is None:
-        _, ax = plt.subplots()
+        fig, (ax_mag, ax_phase) = plt.subplots(
+            2, 1, sharex=True, figsize=(8, 6)
+        )
+    else:
+        # If user provides only one axis, create a twin axis for phase
+        ax_mag = ax
+        ax_phase = ax.twinx()
 
     x = freqs / freq_scale
-    for i, j in params:
-        db = 20.0 * np.log10(np.abs(S_matrix[:, i - 1, j - 1]))
-        ax.plot(x, db, label=f"S{i}{j}")
 
-    ax.set_xlabel(freq_label)
-    ax.set_ylabel("Magnitude (dB)")
+    for i, j in params:
+        s_param = S_matrix[:, i - 1, j - 1]
+
+        # Magnitude in dB
+        db = 20.0 * np.log10(np.abs(s_param))
+
+        # Phase (unwrapped)
+        angles = np.unwrap(np.angle(s_param), axis=0)
+
+        ax_mag.plot(x, db, label=f"S{i}{j} | Mag")
+        ax_phase.plot(x, angles, linestyle="--", label=f"S{i}{j} | Phase")
+
+    ax_mag.set_xlabel(freq_label)
+    ax_mag.set_ylabel("Magnitude (dB)")
+    ax_phase.set_ylabel("Phase (rad)")
+
     if ylim is not None:
-        ax.set_ylim(ylim)
-    ax.legend(loc="best")
-    ax.grid(True, alpha=0.3)
-    return ax
+        ax_mag.set_ylim(ylim)
+
+    ax_mag.grid(True, alpha=0.3)
+
+    # Combine legends from both axes
+    lines1, labels1 = ax_mag.get_legend_handles_labels()
+    lines2, labels2 = ax_phase.get_legend_handles_labels()
+    ax_mag.legend(lines1 + lines2, labels1 + labels2, loc="best")
+
+    return ax_mag, ax_phase
