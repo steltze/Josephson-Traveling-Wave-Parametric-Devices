@@ -30,8 +30,10 @@ class JTL:
     @classmethod
     def left_handed(cls) -> type:
         """Return a JTL subclass configured as a left-handed transmission line."""
+
         class LHJTL(cls):
             handedness = "left"
+
         LHJTL.__name__ = "LHJTL"
         return LHJTL
 
@@ -64,14 +66,16 @@ class JTL:
             rng = np.random.default_rng(config.disorder_seed)
             lo = 1 - config.disorder_span / 2
             hi = 1 + config.disorder_span / 2
-            L  *= rng.uniform(lo, hi, ncell)
-            C  *= rng.uniform(lo, hi, ncell)
+            L *= rng.uniform(lo, hi, ncell)
+            C *= rng.uniform(lo, hi, ncell)
             Cs_jj *= rng.uniform(lo, hi, ncell)
 
         if config.nramp > 0:
             alpha = 4.0 / config.nramp
-            ramp_up   = 0.5 * (1 + np.tanh(alpha * (ns - config.nramp / 2)))
-            ramp_down = 0.5 * (1 + np.tanh(alpha * ((ncell - 1 - config.nramp / 2) - ns)))
+            ramp_up = 0.5 * (1 + np.tanh(alpha * (ns - config.nramp / 2)))
+            ramp_down = 0.5 * (
+                1 + np.tanh(alpha * ((ncell - 1 - config.nramp / 2) - ns))
+            )
             profile = ramp_up * ramp_down
         else:
             profile = np.ones(ncell)
@@ -83,37 +87,47 @@ class JTL:
         v_p = config.v_pump
         thetas = w_p / v_p * ns * a
 
-        lh = (cls.handedness == "left")
+        lh = cls.handedness == "left"
         cells = []
         for i in range(ncell):
-            first = (i == 0)
+            first = i == 0
 
             if not lh:
                 C_end = C[i] / (2.0 if (i == 0 or i == ncell - 1) else 1.0)
                 _L, _wj, _eps, _th = L[i], wj[i], epsilons[i], thetas[i]
                 _C = C_end
-                cells.append(CellImmitance(
-                    theta=_th,
-                    Zs0_fn=lambda w, L=_L, f=first: 0.0 if f else 1j * w * L,
-                    Yg0_fn=lambda w, C=_C: 1j * w * C,
-                    Zs_harm_fn=lambda m, w, L=_L, wji=_wj, eps=_eps, f=first: (
-                        1j * w * L * eps / (1 - w**2 / wji**2) ** 2
-                        if (m == 1 and not f) else 0.0
-                    ),
-                    Yg_harm_fn=lambda m, w: 0j,
-                ))
+                cells.append(
+                    CellImmitance(
+                        theta=_th,
+                        Zs0_fn=lambda w, L=_L, wji=_wj, f=first: (
+                            0.0 if f else 1j * w * L / (1 - w**2 / wji**2)
+                        ),
+                        Yg0_fn=lambda w, C=_C: 1j * w * C,
+                        Zs_harm_fn=lambda m, w, L=_L, wji=_wj, eps=_eps, f=first: (
+                            1j * w * L * eps / (2 * (1 - w**2 / wji**2) ** 2)
+                            if (m == 1 and not f)
+                            else 0.0
+                        ),
+                        Yg_harm_fn=lambda m, w: 0j,
+                    )
+                )
             else:
                 L_end = L[i] / (2.0 if (i == 0 or i == ncell - 1) else 1.0)
                 _C, _wj, _eps, _th = C[i], wj[i], epsilons[i], thetas[i]
                 _L = L_end
-                cells.append(CellImmitance(
-                    theta=_th,
-                    Zs0_fn=lambda w, C=_C, f=first: 0.0 if f else 1 / (1j * w * C),
-                    Yg0_fn=lambda w, L=_L: 1 / (1j * w * L),
-                    Zs_harm_fn=lambda m, w: 0j,
-                    Yg_harm_fn=lambda m, w, L=_L, wji=_wj, eps=_eps: (
-                        1 / (1j * w * L) * eps / (1 - w**2 / wji**2) ** 2
-                        if m == 1 else 0.0
-                    ),
-                ))
+                cells.append(
+                    CellImmitance(
+                        theta=_th,
+                        Zs0_fn=lambda w, C=_C, f=first: 0.0 if f else 1 / (1j * w * C),
+                        Yg0_fn=lambda w, L=_L, wji=_wj: (
+                            (1 - w**2 / wji**2) / (1j * w * L)
+                        ),
+                        Zs_harm_fn=lambda m, w: 0j,
+                        Yg_harm_fn=lambda m, w, L=_L, eps=_eps: (
+                            1j * eps / (2 * w * L)
+                            if m == 1
+                            else 0.0
+                        ),
+                    )
+                )
         return cells

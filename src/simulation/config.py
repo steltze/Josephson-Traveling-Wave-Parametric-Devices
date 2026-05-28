@@ -1,5 +1,8 @@
 from dataclasses import dataclass, field
+import logging
 import numpy as np
+
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -30,6 +33,8 @@ class SimulationConfig:
         Target centre angular frequency for phase matching (rad/s).
     v_ratio : float
         v_sigma / v_pump — how much slower the pump is vs the signal.
+    omega_pump : float | None
+        Pump angular frequency (rad/s). If None, derived as v_ratio * omega_c.
     freq_min, freq_max : float
         Frequency sweep edges (Hz).
     n_freqs : int
@@ -64,6 +69,7 @@ class SimulationConfig:
     epsilon: float = 0.0
     omega_c: float = 5e9 * 2 * np.pi
     v_ratio: float = 3.0
+    omega_pump: float | None = None  # None → v_ratio * omega_c
 
     # Frequency sweep (Hz)
     freq_min: float = 0.5e9
@@ -77,6 +83,26 @@ class SimulationConfig:
 
     # Adiabatic ramp (0 = flat)
     nramp: int = 0
+
+    def __post_init__(self) -> None:
+        if self.omega_pump is None:
+            self.omega_pump = self.v_ratio * self.omega_c
+
+        if self.ks_state:
+            max_k = max(self.ks_state)
+            max_sideband_hz = (self.freq_max + max_k * self.omega_pump / (2 * np.pi))
+            max_sideband_omega = max_sideband_hz * 2 * np.pi
+            ratio = max_sideband_omega / self.omega_j
+            if ratio > 0.5:
+                log.warning(
+                    "Max sideband frequency %.1f GHz is %.0f%% of ω_j = %.1f GHz. "
+                    "The plasma resonance coupling factor 1/(1-ω²/ω_j²)² will be "
+                    "%.1fx — consider increasing ω_j or reducing freq_max or ω_pump.",
+                    max_sideband_hz / 1e9,
+                    ratio * 100,
+                    self.omega_j / (2e9 * np.pi),
+                    1 / (1 - ratio**2)**2,
+                )
 
     @property
     def freqs(self) -> np.ndarray:
@@ -98,13 +124,3 @@ class SimulationConfig:
         """Pump phase velocity (m/s)."""
         return self.v_sigma / self.v_ratio
 
-    @property
-    def omega_pump(self) -> float:
-        """
-        Phase-matched pump frequency (rad/s).
-
-        Derived from the continuous-wave phase-matching condition
-        k_p = omega_p / v_p = omega_c / v_sigma * v_ratio, giving
-        omega_p = v_ratio * omega_c.
-        """
-        return self.v_ratio * self.omega_c

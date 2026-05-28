@@ -15,7 +15,7 @@ class ABCDMatrix:
     Internal storage is always (Nf, N, N) complex, even for a single frequency.
     N must be even; the matrix is partitioned into four (N/2 x N/2) blocks:
 
-        [Vn_1 ]   [A B] [Vn ]
+        [Vn_1 ]   [A B] [Vn]
         [In_1 ] = [C D] [In]
 
     Cascading: T_total = T1 @ T2.

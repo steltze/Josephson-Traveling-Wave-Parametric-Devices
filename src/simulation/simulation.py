@@ -127,7 +127,7 @@ class Simulation:
 
         f_GHz = self._cfg.freqs / 1e9
         for mode_i in range(k.shape[1]):
-            ax.plot(k[:, mode_i], f_GHz, label=f"mode {mode_i}")
+            ax.plot(k[:, mode_i], f_GHz, ".", label=f"mode {mode_i}")
 
         ax.set_xlabel("k (rad/cell)")
         ax.set_ylabel("Frequency (GHz)")
