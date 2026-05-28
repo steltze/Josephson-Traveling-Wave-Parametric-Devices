@@ -127,10 +127,10 @@ class Simulation:
 
         f_GHz = self._cfg.freqs / 1e9
         for mode_i in range(k.shape[1]):
-            ax.plot(f_GHz, k[:, mode_i], label=f"mode {mode_i}")
+            ax.plot(k[:, mode_i], f_GHz, label=f"mode {mode_i}")
 
-        ax.set_xlabel("Frequency (GHz)")
-        ax.set_ylabel("k (rad/cell)")
+        ax.set_xlabel("k (rad/cell)")
+        ax.set_ylabel("Frequency (GHz)")
         ax.set_title(
             f"Dispersion relation  "
             f"(M={self._cfg.M}, ks={self._cfg.ks_state}, cell {idx})"

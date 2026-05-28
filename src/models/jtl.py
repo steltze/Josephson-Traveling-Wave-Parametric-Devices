@@ -9,20 +9,34 @@ class JTL:
     """
     Factory for Josephson Transmission Line unit cells.
 
-    Symmetric pi-topology:
-      - first and last cells carry Cg/2 (half shunt capacitor)
-      - first cell has no series inductance (open left end of pi section)
+    Right-handed (default): series inductor + shunt capacitor.
+    Left-handed:            series capacitor + shunt inductor.
 
-    Series impedance modulation:
-      Zs(t) = Zs0(w) + epsilon * Zs0(w) / (1 - w^2/wj^2)^2 * 2*cos(wp*t + theta_n)
+    In both topologies:
+      - symmetric pi-section: end cells carry half the shunt element
+      - first cell has no series element (open left port of the pi)
+      - pump modulation acts on the Josephson (reactive) element:
+          RH → Zs_harm  (series L modulated)
+          LH → Yg_harm  (shunt L modulated)
 
     Usage
     -----
-    cells = JTL.build(config)
+    sim = Simulation(JTL, cfg)                # right-handed
+    sim = Simulation(JTL.left_handed(), cfg)  # left-handed
     """
 
-    @staticmethod
-    def build(config) -> list[CellImmitance]:
+    handedness: str = "right"
+
+    @classmethod
+    def left_handed(cls) -> type:
+        """Return a JTL subclass configured as a left-handed transmission line."""
+        class LHJTL(cls):
+            handedness = "left"
+        LHJTL.__name__ = "LHJTL"
+        return LHJTL
+
+    @classmethod
+    def build(cls, config) -> list[CellImmitance]:
         """
         Build one CellImmitance per unit cell.
 
@@ -39,52 +53,67 @@ class JTL:
         a = config.cell_size
 
         ZR = config.Z0 * np.ones(ncell)
-        Ls = ZR / config.omega_cutoff
-        Cg = 1.0 / (config.omega_cutoff * ZR)
-        Cs = 1.0 / (config.omega_j**2 * Ls)
+        # element values — same parametrisation for both topologies:
+        #   RH: L (series),  C (shunt)
+        #   LH: C (series),  L (shunt)   ← same numbers, swapped roles
+        L = ZR / config.omega_cutoff
+        C = 1.0 / (config.omega_cutoff * ZR)
+        Cs_jj = 1.0 / (config.omega_j**2 * L)   # junction self-capacitance (RH) / series cap correction (LH)
 
         if config.disorder:
             rng = np.random.default_rng(config.disorder_seed)
             lo = 1 - config.disorder_span / 2
             hi = 1 + config.disorder_span / 2
-            Ls *= rng.uniform(lo, hi, ncell)
-            Cs *= rng.uniform(lo, hi, ncell)
-            Cg *= rng.uniform(lo, hi, ncell)
+            L  *= rng.uniform(lo, hi, ncell)
+            C  *= rng.uniform(lo, hi, ncell)
+            Cs_jj *= rng.uniform(lo, hi, ncell)
 
         if config.nramp > 0:
             alpha = 4.0 / config.nramp
-            ramp_up = 0.5 * (1 + np.tanh(alpha * (ns - config.nramp / 2)))
-            ramp_down = 0.5 * (
-                1 + np.tanh(alpha * ((ncell - 1 - config.nramp / 2) - ns))
-            )
+            ramp_up   = 0.5 * (1 + np.tanh(alpha * (ns - config.nramp / 2)))
+            ramp_down = 0.5 * (1 + np.tanh(alpha * ((ncell - 1 - config.nramp / 2) - ns)))
             profile = ramp_up * ramp_down
         else:
             profile = np.ones(ncell)
 
         epsilons = profile * config.epsilon
-        wj = 1.0 / np.sqrt(Ls * Cs)
+        wj = 1.0 / np.sqrt(L * Cs_jj)
 
         w_p = config.omega_pump
         v_p = config.v_pump
         thetas = w_p / v_p * ns * a
 
+        lh = (cls.handedness == "left")
         cells = []
         for i in range(ncell):
-            _first = i == 0
-            _Cg = Cg[i] / (2.0 if (i == 0 or i == ncell - 1) else 1.0)
-            _L, _wj, _eps, _th = Ls[i], wj[i], epsilons[i], thetas[i]
+            first = (i == 0)
 
-            cells.append(
-                CellImmitance(
+            if not lh:
+                C_end = C[i] / (2.0 if (i == 0 or i == ncell - 1) else 1.0)
+                _L, _wj, _eps, _th = L[i], wj[i], epsilons[i], thetas[i]
+                _C = C_end
+                cells.append(CellImmitance(
                     theta=_th,
-                    Zs0_fn=lambda w, L=_L, first=_first: 0.0 if first else 1j * w * L,
-                    Yg0_fn=lambda w, C=_Cg: 1j * w * C,
-                    Zs_harm_fn=lambda m, w, L=_L, wji=_wj, eps=_eps, first=_first: (
+                    Zs0_fn=lambda w, L=_L, f=first: 0.0 if f else 1j * w * L,
+                    Yg0_fn=lambda w, C=_C: 1j * w * C,
+                    Zs_harm_fn=lambda m, w, L=_L, wji=_wj, eps=_eps, f=first: (
                         1j * w * L * eps / (1 - w**2 / wji**2) ** 2
-                        if (m == 1 and not first)
-                        else 0.0
+                        if (m == 1 and not f) else 0.0
                     ),
                     Yg_harm_fn=lambda m, w: 0j,
-                )
-            )
+                ))
+            else:
+                L_end = L[i] / (2.0 if (i == 0 or i == ncell - 1) else 1.0)
+                _C, _wj, _eps, _th = C[i], wj[i], epsilons[i], thetas[i]
+                _L = L_end
+                cells.append(CellImmitance(
+                    theta=_th,
+                    Zs0_fn=lambda w, C=_C, f=first: 0.0 if f else 1 / (1j * w * C),
+                    Yg0_fn=lambda w, L=_L: 1 / (1j * w * L),
+                    Zs_harm_fn=lambda m, w: 0j,
+                    Yg_harm_fn=lambda m, w, L=_L, wji=_wj, eps=_eps: (
+                        1 / (1j * w * L) * eps / (1 - w**2 / wji**2) ** 2
+                        if m == 1 else 0.0
+                    ),
+                ))
         return cells

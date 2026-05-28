@@ -18,10 +18,11 @@ def main():
     cfg = SimulationConfig(
         Z0=50,
         M=1,
-        ks_state=[0],
+        ks_state=[0, 1],
         ncell=500,
         cell_size=10e-6,
-        omega_cutoff=50e9 * 2 * np.pi,
+        omega_cutoff=50e9 * 2 * np.pi, # RH ATL
+        # omega_cutoff=0.1e9 * 2 * np.pi, # LH ATL
         omega_j=30e9 * 2 * np.pi,
         epsilon=0.0,
         omega_c=5e9 * 2 * np.pi,
@@ -35,13 +36,14 @@ def main():
 
     logging.info("omega_pump = %.3f GHz", cfg.omega_pump / (2 * np.pi * 1e9))
 
+    # sim = Simulation(JTL.left_handed(), cfg)
     sim = Simulation(JTL, cfg)
 
     symbolic_matrix, _ = sim.get_symbolic_matrix()
     # a = CellSingleMode()
     # a.export_matrix_graphic(symbolic_matrix)
     # sim.plot_s_parameters([(3, 1), (1, 1), (2, 1), (4, 1)])
-    sim.plot_s_parameters([(2, 1), (1, 1)])
+    sim.plot_s_parameters([(1, 1), (2, 1), (3, 1), (4, 1)])
     sim.plot_dispersion_relation()
     plt.show()
 
