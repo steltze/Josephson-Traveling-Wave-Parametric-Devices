@@ -57,10 +57,10 @@ def main2():
         ks_state=[0, 1],
         ncell=320,
         cell_size=10e-6,
-        omega_cutoff=50 / 530e-12,        # L = 530 pH, C = 212 fF → ~15 GHz
+        omega_cutoff=50 / 530e-12,  # L = 530 pH, C = 212 fF → ~15 GHz
         omega_pump=6.8e9 * 2 * np.pi,
         omega_j=60e9 * 2 * np.pi,
-        epsilon=0.1,                    # 10% inductance modulation (|Φ_RF| = 0.01 Φ_0)
+        epsilon=0.1,  # 10% inductance modulation (|Φ_RF| = 0.01 Φ_0)
         omega_c=3.4e9 * 2 * np.pi,
         v_ratio=2.5,
         freq_min=1e9,
@@ -78,16 +78,30 @@ def main2():
     sim.plot_s_parameters([(1, 1), (1, 2), (1, 3), (1, 4)])
     sim.plot_dispersion_relation()
 
-    omega_signals = cfg.omegas                          # rad/s
-    omega_idlers = omega_signals + cfg.omega_pump       # rad/s
+    omega_signals = cfg.omegas  # rad/s
+    omega_idlers = omega_signals + cfg.omega_pump  # rad/s
     S_matrix = np.abs(sim.get_s_matrix().array)
-    check1 = (S_matrix[:, 0, 0]**2
-              + (omega_signals / omega_idlers) * S_matrix[:, 1, 0]**2
-              + S_matrix[:, 2, 0]**2
-              + (omega_signals / omega_idlers) * S_matrix[:, 3, 0]**2)
+    check1 = (
+        S_matrix[:, 0, 0] ** 2
+        + (omega_signals / omega_idlers) * S_matrix[:, 1, 0] ** 2
+        + S_matrix[:, 2, 0] ** 2
+        + (omega_signals / omega_idlers) * S_matrix[:, 3, 0] ** 2
+    )
+    check2 = (
+        S_matrix[:, 1, 1] ** 2
+        + (omega_idlers / omega_signals) * S_matrix[:, 0, 1] ** 2
+        + S_matrix[:, 3, 1] ** 2
+        + (omega_idlers / omega_signals) * S_matrix[:, 2, 1] ** 2
+    )
     plt.figure()
     plt.plot(omega_signals, check1)
-    print(check1)
+    plt.plot(omega_signals, check2)
+
+    print(omega_signals[check1.argmax()] / 2 / np.pi)
+
+    from analysis.checks import plot_verification
+
+    mm = plot_verification(S_matrix, omega_signals, cfg.omega_pump, [0, 1])
     plt.show()
 
 

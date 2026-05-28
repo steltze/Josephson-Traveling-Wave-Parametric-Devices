@@ -124,9 +124,7 @@ class JTL:
                         ),
                         Zs_harm_fn=lambda m, w: 0j,
                         Yg_harm_fn=lambda m, w, L=_L, eps=_eps: (
-                            1j * eps / (2 * w * L)
-                            if m == 1
-                            else 0.0
+                            1j * eps / (2 * w * L) if m == 1 else 0.0
                         ),
                     )
                 )

@@ -45,9 +45,7 @@ def plot_s_parameters(
         raise ValueError(f"freqs length {freqs.shape[0]} does not match Nf={Nf}")
 
     if ax is None:
-        fig, (ax_mag, ax_phase) = plt.subplots(
-            2, 1, sharex=True, figsize=(12, 8)
-        )
+        fig, (ax_mag, ax_phase) = plt.subplots(2, 1, sharex=True, figsize=(12, 8))
     else:
         # If user provides only one axis, create a twin axis for phase
         ax_mag = ax

@@ -18,20 +18,18 @@ class ABCDMatrix:
         [Vn_1 ]   [A B] [Vn]
         [In_1 ] = [C D] [In]
 
-    Cascading: T_total = T1 @ T2.
+    Cascading two matrices: T_total = T1 @ T2.
     """
 
     def __init__(self, data: np.ndarray) -> None:
         data = np.asarray(data, dtype=complex)
-
-        self._data = self.cascade(data)
-
-    def cascade(self, data):
-        _, Nc, _, _ = data.shape
-        ABCD_total = data[:, 0]
-        for c in range(1, Nc):
-            ABCD_total = data[:, c] @ ABCD_total
-        return ABCD_total
+        if data.ndim == 2:
+            data = data[None]
+        if data.ndim != 3 or data.shape[1] != data.shape[2] or data.shape[1] % 2 != 0:
+            raise ValueError(
+                f"data must be (N, N) or (Nf, N, N) with N even, got {data.shape}"
+            )
+        self._data = data
 
     @property
     def array(self) -> np.ndarray:
@@ -87,52 +85,8 @@ class ABCDMatrix:
             sliced = sliced[None]
         return ABCDMatrix(sliced)
 
-    @classmethod
-    def from_cell_grid_S(cls, data: np.ndarray, Z0: float = 50.0) -> "SMatrix":
-        """
-        Convert a (Nf, Nc, N, N) transfer-matrix grid to a cascaded SMatrix.
-
-        Each cell T maps the state left→right; it is inverted here to obtain
-        the standard ABCD convention before conversion to S-parameters.
-        Cells are then cascaded left-to-right via the Redheffer star product.
-
-        Parameters
-        ----------
-        data : ndarray, shape (Nf, Nc, N, N)
-        Z0   : reference impedance in ohms (default 50)
-
-        Returns
-        -------
-        SMatrix of shape (Nf, N, N)
-        """
-        from solver.s_matrix import SMatrix, ABCD_to_S, redheffer_star
-
-        data = np.asarray(data, dtype=complex)
-        if data.ndim != 4 or data.shape[2] != data.shape[3]:
-            raise ValueError(f"data must be (Nf, Nc, N, N), got {data.shape}")
-        Nf, Nc, N, _ = data.shape
-
-        M_flat = np.linalg.inv(data.reshape(Nf * Nc, N, N))
-        S_flat = ABCD_to_S(M_flat, Z0)
-        S_grid = S_flat.reshape(Nf, Nc, N, N)
-
-        S_total = S_grid[:, 0]
-        for c in range(1, Nc):
-            S_total = redheffer_star(S_grid[:, c], S_total)
-        return SMatrix(S_total, Z0)
-
     def to_S(self, Z0: float = 50.0) -> "SMatrix":
-        """
-        Convert to an SMatrix.
-
-        Parameters
-        ----------
-        Z0 : reference impedance in ohms (default 50)
-
-        Returns
-        -------
-        SMatrix of shape (Nf, N, N)
-        """
+        """Convert to an SMatrix."""
         from solver.s_matrix import SMatrix
 
         return SMatrix.from_ABCD(self._data, Z0)

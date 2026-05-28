@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import logging
+import operator
 import time
 from contextlib import contextmanager
-from typing import Sequence, Tuple, Type
+from functools import reduce
+from typing import Sequence, Tuple
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -56,7 +58,6 @@ class Simulation:
         self._Yg_m = None
         self._T_grid = None
         self._S_matrix: SMatrix | None = None
-        self._ABCD_matrix: ABCDMatrix | None = None
 
     def get_symbolic_matrix(self):
         """
@@ -79,28 +80,25 @@ class Simulation:
                 )
         return self._T_sym, self._state_syms
 
-    def get_abcd_matrix(self) -> ABCDMatrix:
-        """
-        Return the cascaded ABCD matrix over the full line.
-
-        Shape: (Nf, dim, dim)
-        """
-        if self._ABCD_matrix is None:
-            with _timer("ABCD cascade"):
-                self._ABCD_matrix = ABCDMatrix(self._get_T_grid())
-        return self._ABCD_matrix
-
     def get_s_matrix(self) -> SMatrix:
         """
         Return the cascaded S-matrix via the Redheffer star product.
+
+        Each cell transfer matrix is inverted to standard ABCD convention,
+        converted to SMatrix, then cascaded left-to-right.
 
         Shape: (Nf, dim, dim)
         """
         if self._S_matrix is None:
             with _timer("S-matrix cascade"):
-                self._S_matrix = ABCDMatrix.from_cell_grid_S(
-                    self._get_T_grid(), Z0=self._cfg.Z0
-                )
+                T_grid = self._get_T_grid()  # (Nf, Nc, N, N)
+                Nf, Nc, N, _ = T_grid.shape
+                inv_flat = np.linalg.inv(T_grid.reshape(Nf * Nc, N, N))
+                inv_grid = inv_flat.reshape(Nf, Nc, N, N)
+                s_cells = [
+                    ABCDMatrix(inv_grid[:, c]).to_S(self._cfg.Z0) for c in range(Nc)
+                ]
+                self._S_matrix = reduce(operator.matmul, s_cells)
         return self._S_matrix
 
     def plot_dispersion_relation(

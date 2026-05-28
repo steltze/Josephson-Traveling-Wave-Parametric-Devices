@@ -144,26 +144,6 @@ class SMatrix:
         """Port count."""
         return self._data.shape[1]
 
-    @property
-    def _k(self) -> int:
-        return self.N // 2
-
-    @property
-    def S11(self) -> np.ndarray:
-        return self._data[:, : self._k, : self._k]
-
-    @property
-    def S12(self) -> np.ndarray:
-        return self._data[:, : self._k, self._k :]
-
-    @property
-    def S21(self) -> np.ndarray:
-        return self._data[:, self._k :, : self._k]
-
-    @property
-    def S22(self) -> np.ndarray:
-        return self._data[:, self._k :, self._k :]
-
     def __matmul__(self, other: "SMatrix") -> "SMatrix":
         """Cascade self (left/input) with other (right/output) via Redheffer star."""
         if not isinstance(other, SMatrix):

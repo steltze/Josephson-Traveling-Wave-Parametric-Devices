@@ -90,7 +90,7 @@ class SimulationConfig:
 
         if self.ks_state:
             max_k = max(self.ks_state)
-            max_sideband_hz = (self.freq_max + max_k * self.omega_pump / (2 * np.pi))
+            max_sideband_hz = self.freq_max + max_k * self.omega_pump / (2 * np.pi)
             max_sideband_omega = max_sideband_hz * 2 * np.pi
             ratio = max_sideband_omega / self.omega_j
             if ratio > 0.5:
@@ -101,7 +101,7 @@ class SimulationConfig:
                     max_sideband_hz / 1e9,
                     ratio * 100,
                     self.omega_j / (2e9 * np.pi),
-                    1 / (1 - ratio**2)**2,
+                    1 / (1 - ratio**2) ** 2,
                 )
 
     @property
@@ -123,4 +123,3 @@ class SimulationConfig:
     def v_pump(self) -> float:
         """Pump phase velocity (m/s)."""
         return self.v_sigma / self.v_ratio
-
