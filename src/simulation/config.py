@@ -117,7 +117,7 @@ class SimulationConfig:
     @property
     def v_sigma(self) -> float:
         """Signal phase velocity (m/s)."""
-        return self.cell_size * self.omega_cutoff
+        return self.cell_size * self.omega_cutoff / 2
 
     @property
     def v_pump(self) -> float:

@@ -82,10 +82,13 @@ class Simulation:
 
     def get_s_matrix(self) -> SMatrix:
         """
-        Return the cascaded S-matrix via the Redheffer star product.
+        Return the cascaded S-matrix.
 
-        Each cell transfer matrix is inverted to standard ABCD convention,
-        converted to SMatrix, then cascaded left-to-right.
+        Transfer matrices are multiplied first (numerically stable for active
+        systems near parametric oscillation), then a single ABCD→S conversion
+        is applied.  Cell-by-cell Redheffer cascading is avoided because near
+        the backward-wave phase-matching frequency the per-step denominator
+        (I - S2_11 @ S1_22) becomes nearly singular.
 
         Shape: (Nf, dim, dim)
         """
@@ -93,12 +96,12 @@ class Simulation:
             with _timer("S-matrix cascade"):
                 T_grid = self._get_T_grid()  # (Nf, Nc, N, N)
                 Nf, Nc, N, _ = T_grid.shape
-                inv_flat = np.linalg.inv(T_grid.reshape(Nf * Nc, N, N))
-                inv_grid = inv_flat.reshape(Nf, Nc, N, N)
-                s_cells = [
-                    ABCDMatrix(inv_grid[:, c]).to_S(self._cfg.Z0) for c in range(Nc)
-                ]
-                self._S_matrix = reduce(operator.matmul, s_cells)
+                # Cascade T-matrices by direct multiplication
+                T_total = T_grid[:, 0].copy()
+                for c in range(1, Nc):
+                    T_total = T_grid[:, c] @ T_total
+                ABCD_total = np.linalg.inv(T_total)
+                self._S_matrix = ABCDMatrix(ABCD_total).to_S(self._cfg.Z0)
         return self._S_matrix
 
     def plot_dispersion_relation(

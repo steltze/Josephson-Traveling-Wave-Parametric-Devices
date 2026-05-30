@@ -58,8 +58,11 @@ class JTL:
         # element values — same parametrisation for both topologies:
         #   RH: L (series),  C (shunt)
         #   LH: C (series),  L (shunt)   ← same numbers, swapped roles
-        L = ZR / config.omega_cutoff
-        C = 1.0 / (config.omega_cutoff * ZR)
+        """
+        Add docs on values
+        """
+        L = ZR / config.omega_cutoff * 2
+        C = 2* 1.0 / (config.omega_cutoff * ZR)
         Cs_jj = 1.0 / (config.omega_j**2 * L)   # junction self-capacitance (RH) / series cap correction (LH)
 
         if config.disorder:
@@ -104,11 +107,11 @@ class JTL:
                         ),
                         Yg0_fn=lambda w, C=_C: 1j * w * C,
                         Zs_harm_fn=lambda m, w, L=_L, wji=_wj, eps=_eps, f=first: (
-                            1j * w * L * eps / (2 * (1 - w**2 / wji**2) ** 2)
-                            if (m == 1 and not f)
+                            1j * w * L * (eps**m) / (2*(1 - w**2 / wji**2) ** (m+1))
+                            if (not f)
                             else 0.0
                         ),
-                        Yg_harm_fn=lambda m, w: 0j,
+                        Yg_harm_fn=lambda m, w: 0.0,
                     )
                 )
             else:

@@ -57,15 +57,15 @@ def main2():
         ks_state=[0, 1],
         ncell=320,
         cell_size=10e-6,
-        omega_cutoff=50 / 530e-12,  # L = 530 pH, C = 212 fF → ~15 GHz
+        omega_cutoff=2*50 / 530e-12,  # L = 530 pH, C = 212 fF → ~30 GHz
         omega_pump=6.8e9 * 2 * np.pi,
-        omega_j=60e9 * 2 * np.pi,
+        omega_j=60e9 * 2 * np.pi, # usually smaller
         epsilon=0.1,  # 10% inductance modulation (|Φ_RF| = 0.01 Φ_0)
         omega_c=3.4e9 * 2 * np.pi,
         v_ratio=2.5,
         freq_min=1e9,
         freq_max=12e9,
-        n_freqs=500,
+        n_freqs=800,
         disorder=False,
         nramp=0,
     )
@@ -77,6 +77,7 @@ def main2():
     sim.plot_s_parameters([(1, 1), (2, 1), (3, 1), (4, 1)])
     sim.plot_s_parameters([(1, 1), (1, 2), (1, 3), (1, 4)])
     sim.plot_dispersion_relation()
+    logging.info(f"f cutoff = {cfg.omega_cutoff/1e9/2/np.pi}")
 
     omega_signals = cfg.omegas  # rad/s
     omega_idlers = omega_signals + cfg.omega_pump  # rad/s
@@ -97,11 +98,14 @@ def main2():
     plt.plot(omega_signals, check1)
     plt.plot(omega_signals, check2)
 
-    print(omega_signals[check1.argmax()] / 2 / np.pi)
+    logging.info(omega_signals[check1.argmax()] / 2 / np.pi / 1e9)
 
     from analysis.checks import plot_verification
 
-    mm = plot_verification(S_matrix, omega_signals, cfg.omega_pump, [0, 1])
+    # mm = plot_verification(S_matrix, omega_signals, cfg.omega_pump, [0, 1])
+    symbolic_matrix, _ = sim.get_symbolic_matrix()
+    a = CellSingleMode()
+    a.export_matrix_graphic(symbolic_matrix)
     plt.show()
 
 

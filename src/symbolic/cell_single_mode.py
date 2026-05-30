@@ -360,7 +360,8 @@ class CellSingleMode:
         labels = (
             [_mathtext(s) for s in state_syms]
             if state_syms
-            else [str(j) for j in range(dim)]
+            else [f"V_{{{j},n}}" for j in range(dim // 2)]
+            + [f"I_{{{j},n}}" for j in range(dim // 2)]
         )
 
         # Figure geometry
