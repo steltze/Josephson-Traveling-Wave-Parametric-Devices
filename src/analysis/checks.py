@@ -10,6 +10,9 @@ Physical consistency checks for the TWPA/TWPC matrices.
 from __future__ import annotations
 import numpy as np
 import matplotlib.pyplot as plt
+from logger import get_logger
+
+log = get_logger(__name__)
 
 
 def _get_port_frequencies(
@@ -137,6 +140,19 @@ def check_photon_conservation(
 
     return check
 
+def check_transfer_matrix_determinant(
+    T_grid: np.ndarray,  # (Nf, Nc, N, N)
+    tolerance: float = 1e-12,
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Returns the (Nf, Nc) indices where |det(T) - 1| >= tolerance.
+    """
+    dets = np.abs(np.linalg.det(T_grid))  # (Nf, Nc)
+    violating = np.abs(dets - 1.0) >= tolerance
+    nf_idx, nc_idx = np.where(violating)
+    if nf_idx.size:
+        log.error(f"{nf_idx.size} cells with |det(T)-1| >= {tolerance}.")
+    else:
+        log.passed("Determinant check pass!")
+    return nf_idx, nc_idx
 
-def check_transfer_matrix_determinant():
-    return

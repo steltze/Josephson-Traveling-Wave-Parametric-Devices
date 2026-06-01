@@ -1,9 +1,5 @@
 from __future__ import annotations
 
-import logging
-import operator
-import time
-from contextlib import contextmanager
 from functools import reduce
 from typing import Sequence, Tuple
 
@@ -14,15 +10,9 @@ from symbolic.cell_single_mode import CellSingleMode
 from solver.s_matrix import SMatrix, ABCD_to_S, redheffer_star
 from analysis.dispersion_relation import bloch_wavenumbers
 from analysis.s_parameters import plot_s_parameters as _plot_s_params
+from logger import get_logger, timer as _timer
 
-log = logging.getLogger(__name__)
-
-
-@contextmanager
-def _timer(label: str):
-    t0 = time.perf_counter()
-    yield
-    log.info("[%s] %.4fs", label, time.perf_counter() - t0)
+log = get_logger(__name__)
 
 
 class Simulation:

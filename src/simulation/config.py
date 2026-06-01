@@ -1,8 +1,8 @@
 from dataclasses import dataclass, field
-import logging
 import numpy as np
+from logger import get_logger
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 
 @dataclass
