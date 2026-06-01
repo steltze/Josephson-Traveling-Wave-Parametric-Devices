@@ -62,8 +62,10 @@ class JTL:
         Add docs on values
         """
         L = ZR / config.omega_cutoff * 2
-        C = 2* 1.0 / (config.omega_cutoff * ZR)
-        Cs_jj = 1.0 / (config.omega_j**2 * L)   # junction self-capacitance (RH) / series cap correction (LH)
+        C = 2 * 1.0 / (config.omega_cutoff * ZR)
+        Cs_jj = 1.0 / (
+            config.omega_j**2 * L
+        )  # junction self-capacitance (RH) / series cap correction (LH)
 
         if config.disorder:
             rng = np.random.default_rng(config.disorder_seed)
@@ -107,7 +109,7 @@ class JTL:
                         ),
                         Yg0_fn=lambda w, C=_C: 1j * w * C,
                         Zs_harm_fn=lambda m, w, L=_L, wji=_wj, eps=_eps, f=first: (
-                            1j * w * L * (eps**m) / ((1 - w**2 / wji**2) ** (m+1))
+                            1j * w * L * (eps**m) / ((1 - w**2 / wji**2) ** (m + 1))
                             if (not f)
                             else 0.0
                         ),

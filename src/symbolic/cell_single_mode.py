@@ -165,6 +165,7 @@ class CellSingleMode:
         # recompute D = I + C*B from the already-correct A, B, C blocks so that
         # det(T) = det(D - C*B) = det(I) = 1 exactly.
         from sympy import eye as _eye
+
         B_sym = T_sym[:n_modes, n_modes:]
         C_sym = T_sym[n_modes:, :n_modes]
         T_sym[n_modes:, n_modes:] = _eye(n_modes) + C_sym * B_sym

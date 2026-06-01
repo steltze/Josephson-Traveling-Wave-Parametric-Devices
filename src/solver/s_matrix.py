@@ -193,7 +193,7 @@ class SMatrix:
         Nk = len(ks_state)
         if self.N != 2 * Nk:
             raise ValueError(
-                f"Port count N={self.N} is inconsistent with 2*len(ks_state)={2*Nk}"
+                f"Port count N={self.N} is inconsistent with 2*len(ks_state)={2 * Nk}"
             )
         ks = np.asarray(ks_state)
         port_omegas_half = omegas[:, None] + ks[None, :] * omega_pump  # (Nf, Nk)

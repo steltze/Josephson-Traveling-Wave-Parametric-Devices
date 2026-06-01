@@ -114,9 +114,14 @@ class SimulationConfig:
                     "have no in-state pairs to couple and will have no effect. "
                     "The result will be identical to M=%d. "
                     "To use all M=%d harmonics set ks_state=%s.",
-                    self.M, self.ks_state, span, span + 1, self.M,
+                    self.M,
+                    self.ks_state,
+                    span,
+                    span + 1,
+                    self.M,
                     max(span, 1),
-                    self.M, suggested,
+                    self.M,
+                    suggested,
                 )
 
     @property
