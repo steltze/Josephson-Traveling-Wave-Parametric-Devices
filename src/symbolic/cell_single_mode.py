@@ -159,6 +159,16 @@ class CellSingleMode:
                 T_sym[row_idx, col_idx] = cv_p.coeff(s)
                 T_sym[n_modes + row_idx, col_idx] = ci_p.coeff(s)
 
+        # The harmonic substitution subs(xi, omega[k]).subs(k, k-m) causes the
+        # Yg0 frequency in the D block to be evaluated at the *source* sideband
+        # frequency instead of the *row* frequency, making det(T) != 1. Fix:
+        # recompute D = I + C*B from the already-correct A, B, C blocks so that
+        # det(T) = det(D - C*B) = det(I) = 1 exactly.
+        from sympy import eye as _eye
+        B_sym = T_sym[:n_modes, n_modes:]
+        C_sym = T_sym[n_modes:, :n_modes]
+        T_sym[n_modes:, n_modes:] = _eye(n_modes) + C_sym * B_sym
+
         return T_sym, state_syms
 
     def build_symbolic_transfer_matrix(
