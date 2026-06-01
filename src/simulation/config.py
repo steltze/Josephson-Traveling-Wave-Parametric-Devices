@@ -24,19 +24,19 @@ class SimulationConfig:
     cell_size : float
         Cell length in metres (sets phase velocities).
     omega_cutoff : float
-        Signal/idler mode cutoff angular frequency (rad/s).
+        Signal/idler mode cutoff angular frequency (rad/GHz).
     omega_j : float
-        Junction plasma angular frequency (rad/s).
+        Junction plasma angular frequency (rad/GHz).
     epsilon : float
         Pump modulation depth of the series inductance.
     omega_c : float
-        Target centre angular frequency for phase matching (rad/s).
+        Target centre angular frequency for phase matching (rad/GHz).
     v_ratio : float
         v_sigma / v_pump — how much slower the pump is vs the signal.
     omega_pump : float | None
-        Pump angular frequency (rad/s). If None, derived as v_ratio * omega_c.
+        Pump angular frequency (rad/GHz). If None, derived as v_ratio * omega_c.
     freq_min, freq_max : float
-        Frequency sweep edges (Hz).
+        Frequency sweep edges (GHz).
     n_freqs : int
         Number of frequency points.
     disorder : bool
@@ -61,19 +61,19 @@ class SimulationConfig:
     ncell: int = 500
     cell_size: float = 10e-6
 
-    # Circuit frequencies (rad/s)
-    omega_cutoff: float = 50e9 * 2 * np.pi
-    omega_j: float = 30e9 * 2 * np.pi
+    # Circuit frequencies (rad/GHz)
+    omega_cutoff: float = 50 * 2 * np.pi
+    omega_j: float = 30 * 2 * np.pi
 
     # Pump
     epsilon: float = 0.0
-    omega_c: float = 5e9 * 2 * np.pi
+    omega_c: float = 5 * 2 * np.pi
     v_ratio: float = 3.0
     omega_pump: float | None = None  # None → v_ratio * omega_c
 
-    # Frequency sweep (Hz)
-    freq_min: float = 0.5e9
-    freq_max: float = 12e9
+    # Frequency sweep (GHz)
+    freq_min: float = 0.5
+    freq_max: float = 12.0
     n_freqs: int = 500
 
     # Disorder
@@ -90,33 +90,48 @@ class SimulationConfig:
 
         if self.ks_state:
             max_k = max(self.ks_state)
-            max_sideband_hz = self.freq_max + max_k * self.omega_pump / (2 * np.pi)
-            max_sideband_omega = max_sideband_hz * 2 * np.pi
+            max_sideband_GHz = self.freq_max + max_k * self.omega_pump / (2 * np.pi)
+            max_sideband_omega = max_sideband_GHz * 2 * np.pi
             ratio = max_sideband_omega / self.omega_j
             if ratio > 0.5:
                 log.warning(
                     "Max sideband frequency %.1f GHz is %.0f%% of ω_j = %.1f GHz. "
                     "The plasma resonance coupling factor 1/(1-ω²/ω_j²)² will be "
                     "%.1fx — consider increasing ω_j or reducing freq_max or ω_pump.",
-                    max_sideband_hz / 1e9,
+                    max_sideband_GHz,
                     ratio * 100,
-                    self.omega_j / (2e9 * np.pi),
+                    self.omega_j / (2 * np.pi),
                     1 / (1 - ratio**2) ** 2,
+                )
+
+        if self.M > 1 and self.ks_state:
+            span = max(self.ks_state) - min(self.ks_state)
+            if self.M > span:
+                ks_min = min(self.ks_state)
+                suggested = list(range(ks_min, ks_min + self.M + 1))
+                log.warning(
+                    "M=%d but ks_state=%s has span %d — harmonics of order %d..%d "
+                    "have no in-state pairs to couple and will have no effect. "
+                    "The result will be identical to M=%d. "
+                    "To use all M=%d harmonics set ks_state=%s.",
+                    self.M, self.ks_state, span, span + 1, self.M,
+                    max(span, 1),
+                    self.M, suggested,
                 )
 
     @property
     def freqs(self) -> np.ndarray:
-        """Frequency array in Hz."""
+        """Frequency array in GHz."""
         return np.linspace(self.freq_min, self.freq_max, self.n_freqs)
 
     @property
     def omegas(self) -> np.ndarray:
-        """Angular frequency array in rad/s."""
+        """Angular frequency array in rad/GHz."""
         return self.freqs * 2 * np.pi
 
     @property
     def v_sigma(self) -> float:
-        """Signal phase velocity (m/s)."""
+        """Signal phase velocity (cell_size * omega_cutoff / 2)."""
         return self.cell_size * self.omega_cutoff / 2
 
     @property

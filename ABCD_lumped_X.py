@@ -323,6 +323,19 @@ if disorder:
 
 out = Line(Lss, Css, Cgs, Cis, Z0, thetas, epsilonSs).forward(2 * np.pi * freqs)
 
+S_matrix = np.abs(out)
+omega_signals = freqs * 2 * np.pi
+omega_idlers = omega_signals + w_p
+check1 = (
+    S_matrix[:, 0, 0] ** 2
+    + (omega_signals / omega_idlers) * S_matrix[:, 1, 0] ** 2
+    + S_matrix[:, 2, 0] ** 2
+    + (omega_signals / omega_idlers) * S_matrix[:, 3, 0] ** 2
+)
+plt.figure()
+plt.plot(omega_signals, check1)
+print(check1)
+plt.show()
 
 logS1S2 = 20 * np.log10(np.abs(out[:, 0, 2]))
 logS2S1 = 20 * np.log10(np.abs(out[:, 2, 0]))

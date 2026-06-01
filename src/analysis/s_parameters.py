@@ -11,7 +11,7 @@ def plot_s_parameters(
     freqs: np.ndarray,
     params: Sequence[Tuple[int, int]],
     ax: plt.Axes | None = None,
-    freq_scale: float = 1e9,
+    freq_scale: float = 1,
     freq_label: str = "Frequency (GHz)",
     ylim: tuple | None = None,
 ) -> plt.Axes:
@@ -21,10 +21,10 @@ def plot_s_parameters(
     Parameters
     ----------
     S          : ndarray, shape (Nf, N, N) — complex S-matrix
-    freqs      : ndarray, shape (Nf,)      — frequencies in Hz
+    freqs      : ndarray, shape (Nf,)      — frequencies in GHz
     params     : list of (i, j) zero-based index pairs to plot
     ax         : existing Axes to draw on; a new figure is created if None
-    freq_scale : divisor for the x-axis (default 1e9 → GHz)
+    freq_scale : divisor for the x-axis (default 1 → GHz as-is)
     freq_label : x-axis label string
     ylim       : optional (ymin, ymax) for the y-axis
 
