@@ -11,8 +11,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from symbolic.cell_single_mode import CellSingleMode
-from solver.abcd_matrix import ABCDMatrix
-from solver.s_matrix import SMatrix
+from solver.s_matrix import SMatrix, ABCD_to_S, redheffer_star
 from analysis.dispersion_relation import bloch_wavenumbers
 from analysis.s_parameters import plot_s_parameters as _plot_s_params
 
@@ -96,12 +95,19 @@ class Simulation:
             with _timer("S-matrix cascade"):
                 T_grid = self._get_T_grid()  # (Nf, Nc, N, N)
                 Nf, Nc, N, _ = T_grid.shape
-                # Cascade T-matrices by direct multiplication
-                T_total = T_grid[:, 0].copy()
+                # Convert each per-cell T-matrix to S, then cascade via Redheffer star
+                S_cells = ABCD_to_S(np.linalg.inv(T_grid.reshape(Nf * Nc, N, N)), self._cfg.Z0).reshape(Nf, Nc, N, N)
+                # Photon-flux normalization: S_ph[f,c,i,j] = S[f,c,i,j] * sqrt(ω_j/ω_i)
+                ks = np.asarray(self._cfg.ks_state)
+                # port_omegas = np.concatenate([
+                #     self._cfg.omegas[:, None] + ks[None, :] * self._cfg.omega_pump,
+                # ] * 2, axis=1)  # (Nf, N)
+                # sqrt_omega = np.sqrt(port_omegas)  # (Nf, N)
+                # S_cells = S_cells * (sqrt_omega[:, None, None, :] / sqrt_omega[:, None, :, None])
+                S_total = S_cells[:, 0]
                 for c in range(1, Nc):
-                    T_total = T_grid[:, c] @ T_total
-                ABCD_total = np.linalg.inv(T_total)
-                self._S_matrix = ABCDMatrix(ABCD_total).to_S(self._cfg.Z0)
+                    S_total = redheffer_star(S_cells[:, c], S_total)
+                self._S_matrix = SMatrix(S_total, self._cfg.Z0)
         return self._S_matrix
 
     def plot_dispersion_relation(
