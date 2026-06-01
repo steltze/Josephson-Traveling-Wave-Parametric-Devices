@@ -132,9 +132,8 @@ class Simulation:
         if ax is None:
             _, ax = plt.subplots(figsize=(7, 4))
 
-        f_GHz = self._cfg.freqs / 1e9
         for mode_i in range(k.shape[1]):
-            ax.plot(k[:, mode_i], f_GHz, ".", label=f"mode {mode_i}")
+            ax.plot(k[:, mode_i], self._cfg.freqs, ".", label=f"mode {mode_i}")
 
         ax.set_xlabel("k (rad/cell)")
         ax.set_ylabel("Frequency (GHz)")

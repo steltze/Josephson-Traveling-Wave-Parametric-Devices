@@ -12,17 +12,10 @@ def bloch_wavenumbers(
     """
     Bloch propagation constants for an NxN unit cell via eigenvalue decomposition.
 
-    Each eigenvalue λ_i of the forward transfer matrix T satisfies:
-        state(n+1) = λ_i · state(n)   (Bloch condition)
-    giving propagation constant γ_i = −log(λ_i) = α_i + j·k_i.
-
     For N = 2 this is equivalent to two_port_dispersion().
     For N > 2 (coupled sidebands from pump modulation), all N Bloch-mode
     wavenumbers are returned simultaneously.
 
-    The N modes come in ±k pairs for a lossless reciprocal ATL:
-    forward-propagating modes have k > 0, backward-propagating k < 0.
-    In passbands |α| ≈ 0; in stopbands |α| > 0 and k = 0 or π.
 
     Parameters
     ----------
