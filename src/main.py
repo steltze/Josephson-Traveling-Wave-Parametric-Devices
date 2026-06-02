@@ -54,14 +54,14 @@ def julia_comparison():
         ks_state=ks_state,
         ncell=ncell,
         cell_size=10e-6,
-        omega_cutoff=2 * 50 / 530e-3,  # L = 530 pH, C = 212 fF → ~30 GHz
+        omega_cutoff=2 * 50 / 530e-3,  # L = 530 pH, C = 212 fF -> ~30 GHz
         omega_pump=6.8 * 2 * np.pi,
         omega_j=60 * 2 * np.pi,  # usually smaller
         epsilon=0.055,  # 10% inductance modulation (|Φ_RF| = 0.01 Φ_0)
-        omega_c=3.4 * 2 * np.pi,
+        omega_c=3.4 * 2 * np.pi, # gap: well in the S parameter from signal to tranmission
         v_ratio=2.5,
-        freq_min=1,
-        freq_max=12,
+        freq_min=1, # GHz
+        freq_max=12, # GHz
         n_freqs=1000,
         disorder=False,
         nramp=0,
@@ -87,6 +87,57 @@ def julia_comparison():
     # a.export_matrix_graphic(symbolic_matrix)
 
     plt.show()
+
+def track_gap_center_over_pump_frequency():
+    pump_frequencies = np.linspace(2, 14, 10) * 2 * np.pi
+    
+    ks_state = [0, 1]
+    ncell = 320
+    
+    gap_min = np.zeros(len(pump_frequencies))
+    
+    freq_min=1 # GHz
+    freq_max=12 # GHz
+    n_freqs=500
+    signal_freqs = np.linspace(freq_min, freq_max, n_freqs)
+
+    for index, w_p in enumerate(pump_frequencies):
+        cfg = SimulationConfig(
+            Z0=50,
+            M=1,
+            ks_state=ks_state,
+            ncell=ncell,
+            cell_size=10e-6,
+            omega_cutoff=2 * 50 / 530e-3,  # L = 530 pH, C = 212 fF -> ~30 GHz
+            omega_pump=w_p,
+            omega_j=35 * 2 * np.pi,  # usually smaller
+            epsilon=0.055,  # 10% inductance modulation (|Φ_RF| = 0.01 Φ_0)
+            omega_c=3.4 * 2 * np.pi, # gap: well in the S parameter from signal to tranmission
+            v_ratio=2.5,
+            freq_min=freq_min, # GHz
+            freq_max=freq_max, # GHz
+            n_freqs=n_freqs,
+            disorder=False,
+            nramp=0,
+        )
+
+        sim = Simulation(JTL, cfg)
+        gap_min_index = np.abs(sim.get_s_matrix().array)[:, 2, 0].argmin()
+        # sim.plot_s_parameters([(i, 1) for i in range(1, 2 * len(ks_state) + 1)])
+        # plt.show()
+        gap_min[index] = signal_freqs[gap_min_index] / 2 / np.pi
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.plot(pump_frequencies / 2 / np.pi, gap_min, color="steelblue", linewidth=2, marker="o", markersize=5)
+    ax.set_xlabel("Pump Frequency (GHz)", fontsize=13)
+    ax.set_ylabel("Gap Center Frequency (GHz)", fontsize=13)
+    ax.set_title("Gap Center vs. Pump Frequency", fontsize=14)
+    ax.grid(True, linestyle="--", alpha=0.5)
+    ax.tick_params(labelsize=11)
+    fig.tight_layout()
+    plt.show()
+
+    return 
 
 
 if __name__ == "__main__":

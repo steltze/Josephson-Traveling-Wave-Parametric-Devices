@@ -2,18 +2,18 @@ import logging
 import time
 from contextlib import contextmanager
 
-PASS = 25
-logging.addLevelName(PASS, "PASS")
-logging.Logger.passed = lambda self, msg, *args, **kw: self.log(PASS, msg, *args, **kw)
+TEST = 25
+logging.addLevelName(TEST, "TEST")
+logging.Logger.test = lambda self, msg, *args, **kw: self.log(TEST, msg, *args, **kw)
 
-__all__ = ["logging", "PASS", "get_logger", "setup_logging", "timer"]
+__all__ = ["logging", "TEST", "get_logger", "setup_logging", "timer"]
 
 
 class _ColorFormatter(logging.Formatter):
     _COLORS = {
         logging.DEBUG:    "\033[37m",   # white
         logging.INFO:     "\033[34m",   # blue
-        PASS:             "\033[32m",   # green
+        TEST:             "\033[32m",   # green
         logging.WARNING:  "\033[31m",   # red
         logging.ERROR:    "\033[31m",   # red
         logging.CRITICAL: "\033[1;31m", # bold red

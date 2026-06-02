@@ -153,6 +153,6 @@ def check_transfer_matrix_determinant(
     if nf_idx.size:
         log.error(f"{nf_idx.size} cells with |det(T)-1| >= {tolerance}.")
     else:
-        log.passed("Determinant check pass!")
+        log.test("Determinant check pass!")
     return nf_idx, nc_idx
 

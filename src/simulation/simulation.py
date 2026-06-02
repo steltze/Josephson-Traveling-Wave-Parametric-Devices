@@ -73,12 +73,6 @@ class Simulation:
         """
         Return the cascaded S-matrix.
 
-        Transfer matrices are multiplied first (numerically stable for active
-        systems near parametric oscillation), then a single ABCD→S conversion
-        is applied.  Cell-by-cell Redheffer cascading is avoided because near
-        the backward-wave phase-matching frequency the per-step denominator
-        (I - S2_11 @ S1_22) becomes nearly singular.
-
         Shape: (Nf, dim, dim)
         """
         if self._S_matrix is None:
@@ -87,6 +81,7 @@ class Simulation:
                 Nf, Nc, N, _ = T_grid.shape
                 # Convert each per-cell T-matrix to S, then cascade via Redheffer star
                 S_cells = ABCD_to_S(np.linalg.inv(T_grid.reshape(Nf * Nc, N, N)), self._cfg.Z0).reshape(Nf, Nc, N, N)
+
                 # Photon-flux normalization: S_ph[f,c,i,j] = S[f,c,i,j] * sqrt(ω_j/ω_i)
                 ks = np.asarray(self._cfg.ks_state)
                 # port_omegas = np.concatenate([
@@ -94,6 +89,7 @@ class Simulation:
                 # ] * 2, axis=1)  # (Nf, N)
                 # sqrt_omega = np.sqrt(port_omegas)  # (Nf, N)
                 # S_cells = S_cells * (sqrt_omega[:, None, None, :] / sqrt_omega[:, None, :, None])
+
                 S_total = S_cells[:, 0]
                 for c in range(1, Nc):
                     S_total = redheffer_star(S_cells[:, c], S_total)
