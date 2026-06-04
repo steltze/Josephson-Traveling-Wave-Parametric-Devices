@@ -5,7 +5,7 @@ import numpy as np
 from models.cell import CellImmitance
 
 
-class JTL:
+class JTLDiscrete:
     """
     Factory for Josephson Transmission Line unit cells.
 

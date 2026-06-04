@@ -83,7 +83,7 @@ class Simulation:
                 S_cells = ABCD_to_S(np.linalg.inv(T_grid.reshape(Nf * Nc, N, N)), self._cfg.Z0).reshape(Nf, Nc, N, N)
 
                 # Photon-flux normalization: S_ph[f,c,i,j] = S[f,c,i,j] * sqrt(ω_j/ω_i)
-                ks = np.asarray(self._cfg.ks_state)
+                # ks = np.asarray(self._cfg.ks_state)
                 # port_omegas = np.concatenate([
                 #     self._cfg.omegas[:, None] + ks[None, :] * self._cfg.omega_pump,
                 # ] * 2, axis=1)  # (Nf, N)

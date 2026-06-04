@@ -1,4 +1,4 @@
 from .cell import CellImmitance
-from .jtl import JTL
+from .jtl_discrete import JTLDiscrete
 
-__all__ = ["CellImmitance", "JTL"]
+__all__ = ["CellImmitance", "JTLDiscrete"]
