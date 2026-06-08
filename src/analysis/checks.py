@@ -144,6 +144,7 @@ def check_photon_conservation(
 
     return check
 
+
 def _get_port_sideband_indices(ks_state: list[int]) -> np.ndarray:
     """
     Sideband index k assigned to each S-matrix port.
@@ -260,8 +261,12 @@ def check_pump_photon_balance(
     dE_actual = (Sabsq * omega_i).sum(axis=1) - w  # (Nf, N)
 
     # 3-wave formula: ωₚ · Σᵢ (kᵢ−kⱼ) · |S_ij|² / ωᵢ
-    delta_k = k_ports[:, np.newaxis] - k_ports[np.newaxis, :]  # (N, N): delta_k[i,j] = kᵢ−kⱼ
-    dE_3wave = omega_pump * (Sabsq * delta_k[np.newaxis] / omega_i).sum(axis=1)  # (Nf, N)
+    delta_k = (
+        k_ports[:, np.newaxis] - k_ports[np.newaxis, :]
+    )  # (N, N): delta_k[i,j] = kᵢ−kⱼ
+    dE_3wave = omega_pump * (Sabsq * delta_k[np.newaxis] / omega_i).sum(
+        axis=1
+    )  # (Nf, N)
 
     residual = dE_actual - dE_3wave  # (Nf, N)
 
@@ -309,4 +314,3 @@ def check_transfer_matrix_determinant(
     else:
         log.test("Determinant check pass!")
     return nf_idx, nc_idx
-

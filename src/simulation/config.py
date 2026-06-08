@@ -32,7 +32,7 @@ class SimulationConfig:
     omega_c : float
         Target centre angular frequency for phase matching (rad/GHz).
     v_ratio : float
-        v_sigma / v_pump — how much slower the pump is vs the signal.
+        v_signal / v_pump — how much slower the pump is vs the signal.
     omega_pump : float | None
         Pump angular frequency (rad/GHz). If None, derived as v_ratio * omega_c.
     freq_min, freq_max : float
@@ -135,11 +135,11 @@ class SimulationConfig:
         return self.freqs * 2 * np.pi
 
     @property
-    def v_sigma(self) -> float:
+    def v_signal(self) -> float:
         """Signal phase velocity (cell_size * omega_cutoff / 2)."""
         return self.cell_size * self.omega_cutoff / 2
 
     @property
     def v_pump(self) -> float:
         """Pump phase velocity (m/s)."""
-        return self.v_sigma / self.v_ratio
+        return self.v_signal / self.v_ratio

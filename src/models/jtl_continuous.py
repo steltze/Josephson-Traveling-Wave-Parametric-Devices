@@ -51,7 +51,9 @@ def dispersion(omegas: np.ndarray, omega_cutoff: float) -> np.ndarray:
 
     k·a = 2·arcsin(ω/ωc),  valid for ω ≤ ωc.
     """
-    return 2.0 * np.arcsin(np.clip(np.asarray(omegas, dtype=float) / omega_cutoff, 0.0, 1.0))
+    return 2.0 * np.arcsin(
+        np.clip(np.asarray(omegas, dtype=float) / omega_cutoff, 0.0, 1.0)
+    )
 
 
 def phase_mismatch(
@@ -67,7 +69,7 @@ def phase_mismatch(
     """
     omegas = np.asarray(omegas, dtype=float)
     omega_I = omegas + omega_pump
-    kp = omega_pump * cell_size / v_pump          # rad/cell
+    kp = omega_pump * cell_size / v_pump  # rad/cell
     valid = omega_I < omega_cutoff
     kI = np.where(valid, dispersion(omega_I, omega_cutoff), np.nan)
     ks = dispersion(omegas, omega_cutoff)
@@ -104,68 +106,57 @@ def gap_center(
     return brentq(residual, lo, hi)
 
 
-def s_params(
+def manual_solution(
     omegas: np.ndarray,
     omega_pump: float,
     omega_cutoff: float,
     omega_j: float,
     epsilon: float,
     ncell: int,
-    v_pump: float,
     cell_size: float,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Continuous-model backward-wave S-parameters.
+    v_ratio: float,
+) -> np.ndarray:
+    """Backward-wave BVP using Bloch dispersion and v_ratio.
 
-    Parameters
-    ----------
-    omegas       : signal angular frequencies (Nf,)
-    omega_pump   : pump angular frequency
-    omega_cutoff : LC-ladder cutoff angular frequency
-    omega_j      : Josephson plasma angular frequency
-    epsilon      : pump modulation depth
-    ncell        : number of unit cells N
-    v_pump       : pump phase velocity
-    cell_size    : unit-cell length a
-
-    Returns
-    -------
-    S31_sq : signal transmission  |S31|²
-    S21_sq : signal→backward-idler conversion  |S21|²
-
-    Notes
-    -----
-    Inside the gap (|Δk/2| < γ):  μ is real → cosh/sinh → exponential decay of S31.
-    Outside the gap (|Δk/2| > γ): μ is imaginary → cos/sin → oscillatory.
-
-    Energy conservation (with pump):  (ωI/ωs)·|S21|² + |S31|²  ≈  1.
+    Gap centre (linear approx): ωgap = ωp/2·(v_ratio - 1).
+    Returns |S31|².
     """
     omegas = np.asarray(omegas, dtype=float)
     omega_I = omegas + omega_pump
     valid = omega_I < omega_cutoff
     omega_I_c = np.where(valid, omega_I, omega_cutoff * 0.9999)
 
-    ks = dispersion(omegas, omega_cutoff)           # rad/cell
-    kI = dispersion(omega_I_c, omega_cutoff)        # rad/cell
-    kp = omega_pump * cell_size / v_pump            # rad/cell
+    gap_center_freq = omega_pump / 2.0 * (v_ratio - 1.0)
+    delta = gap_center_freq - omegas  # detuning from gap centre
+    v_signal = cell_size * omega_cutoff / 2
 
-    delta_k = ks + kI - kp                          # backward-wave mismatch; 0 at gap
+    kS = dispersion(omegas, omega_cutoff)  # rad/cell (Bloch)
+    kI = dispersion(omega_I_c, omega_cutoff)  # rad/cell (Bloch)
+    v_pump = v_signal / v_ratio
+    kp = omega_pump * cell_size / v_pump  # rad/cell
 
-    # Effective modulation: both e^{±iΘ} harmonics contribute → factor 2
-    m_eff = 2.0 * epsilon / (1.0 - omegas**2 / omega_j**2)
+    kappa = -kp + kS + kI  # = Δk, rad/cell
 
-    gamma = m_eff * np.sqrt(ks * kI) / 4.0         # coupling rate, rad/cell
+    # kappa = 2.0 * delta / v_signal * cell_size
 
-    # μ = √(γ² − (Δk/2)²):  real → gap/exponential, imaginary → propagating/oscillatory
-    # NumPy complex sqrt handles both cases.
-    mu = np.sqrt(gamma**2 - (delta_k / 2.0)**2 + 0j)   # (Nf,) complex
+    m = 2.0 * epsilon / (1.0 - omegas**2 / omega_j**2)
 
-    # Denominator: D = 1 + (γ/μ)²·sinh²(μN)
-    # Works for both real μ (in gap) and imaginary μ (outside gap).
-    gm_ratio_sq = (gamma / mu) ** 2                     # (γ/μ)²
-    sinh_muN_sq = np.sinh(mu * ncell) ** 2              # sinh²(μN)
-    D = 1.0 + gm_ratio_sq * sinh_muN_sq                 # complex in general
+    q = -m / 4 * np.emath.sqrt((kS - kappa) * (kI + kappa))  # rad/cell
 
-    S31_sq = np.real(1.0 / D)
-    S21_sq = np.real((ks / kI) * gm_ratio_sq * sinh_muN_sq / D)
+    L = ncell  # cells (not metres)
 
-    return np.where(valid, S31_sq, np.nan), np.where(valid, S21_sq, np.nan)
+    Delta = q**2 - (kappa / 2.0) ** 2
+    Delta_sqrt = np.emath.sqrt(Delta)  # real inside gap
+
+    return np.where(
+        valid,
+        np.abs(
+            1
+            / (
+                np.cosh(Delta_sqrt * L)
+                + 0.5j * kappa / Delta_sqrt * np.sinh(Delta_sqrt * L)
+            )
+        )
+        ** 2,
+        np.nan,
+    )
