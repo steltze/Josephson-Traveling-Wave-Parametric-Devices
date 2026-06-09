@@ -274,8 +274,6 @@ def continuous_vs_discrete():
     S11_disc = np.abs(S[:, 0, 0]) ** 2
     S41_disc = np.abs(S[:, 3, 0]) ** 2
 
-    # print(S11_disc.max(), " --- ", ((omega_I / omegas) * S41_disc).max())
-
     # Energy check: (ωI/ωs)·|S21| + |S31| should ≈ 1 with pump
     energy_disc = (
         (omegas / omega_I) * S21_disc
@@ -285,18 +283,8 @@ def continuous_vs_discrete():
     )
 
     # --- continuous ---
-    S31_cont, S21_cont = jtl_continuous.s_params(
-        omegas,
-        cfg.omega_pump,
-        cfg.omega_cutoff,
-        cfg.omega_j,
-        cfg.epsilon,
-        cfg.ncell,
-        cfg.v_pump,
-        cfg.cell_size,
-    )
 
-    S31_cont = jtl_continuous.manual_solution(
+    S31_cont, S21_cont = jtl_continuous.manual_solution(
         omegas=omegas,
         omega_pump=cfg.omega_pump,
         omega_cutoff=cfg.omega_cutoff,
@@ -308,10 +296,10 @@ def continuous_vs_discrete():
     )
 
     delta_k = jtl_continuous.phase_mismatch(
-        omegas, cfg.omega_pump, cfg.omega_cutoff, cfg.v_pump, cfg.cell_size
+        omegas, cfg.omega_pump, cfg.omega_cutoff, cfg.v_pump, cfg.cell_size, cfg.omega_j
     )
     gap_freq = jtl_continuous.gap_center(
-        cfg.omega_pump, cfg.omega_cutoff, cfg.v_pump, cfg.cell_size
+        cfg.omega_pump, cfg.omega_cutoff, cfg.v_pump, cfg.cell_size, cfg.omega_j
     )
 
     log.info(
@@ -369,7 +357,7 @@ def continuous_vs_discrete():
     ax_s21.grid(True, alpha=0.3)
 
     # Phase mismatch
-    ax_dk.plot(freqs_ghz, delta_k, lw=1.5, label="Δk = ks + kI − kp")
+    ax_dk.plot(freqs_ghz, delta_k, lw=1.5, label="Δk = ks + kI - kp")
     ax_dk.axhline(0, color="k", lw=0.8, ls="--")
     _vline(ax_dk)
     ax_dk.set_xlabel("Frequency (GHz)")
@@ -393,6 +381,105 @@ def continuous_vs_discrete():
     plt.show()
 
 
+def compare_gap_bandwidth():
+    cfg = SimulationConfig(
+        Z0=50,
+        M=1,
+        ks_state=[0, 1],
+        ncell=320,
+        cell_size=10e-6,
+        omega_cutoff=2 * 50 / 530e-3,
+        omega_pump=6.8 * 2 * np.pi,
+        omega_j=60 * 2 * np.pi,
+        epsilon=0.055,
+        omega_c=3.4 * 2 * np.pi,
+        v_ratio=2.5,
+        freq_min=1,
+        freq_max=12,
+        n_freqs=1000,
+        disorder=False,
+        nramp=0,
+    )
+
+    # --- discrete: measure bandwidth at -3 dB (|S31|² = 0.5) ---
+    sim = Simulation(JTLDiscrete, cfg)
+    S = sim.get_s_matrix().array
+    S31_sq = np.abs(S[:, 2, 0]) ** 2
+    freqs = cfg.freqs  # GHz
+    omegas = cfg.omegas
+
+    idx_min = np.argmin(S31_sq)
+    threshold = 0.5  # -3 dB from unity baseline
+    below = S31_sq < threshold
+    edges = np.diff(below.astype(int))
+    fall = np.where(edges == 1)[0]
+    rise = np.where(edges == -1)[0]
+
+    if len(fall) > 0 and len(rise) > 0:
+        f_low_disc = freqs[fall[0]]
+        f_high_disc = freqs[rise[0]]
+        bw_disc_ghz = f_high_disc - f_low_disc
+    else:
+        f_low_disc = f_high_disc = bw_disc_ghz = float("nan")
+
+    # --- analytical: Δω = 4γ / (dkS/dω + dkI/dω) ---
+    omega_gap, delta_omega = jtl_continuous.gap_bandwidth(
+        cfg.omega_pump,
+        cfg.omega_cutoff,
+        cfg.omega_j,
+        cfg.epsilon,
+        cfg.v_pump,
+        cfg.cell_size,
+    )
+    bw_cont_ghz = delta_omega / (2 * np.pi) if delta_omega is not None else float("nan")
+    f_gap_cont = omega_gap / (2 * np.pi) if omega_gap is not None else float("nan")
+
+    log.info(
+        "Gap centre  — analytical: %.3f GHz   discrete: %.3f GHz",
+        f_gap_cont,
+        freqs[idx_min],
+    )
+    log.info(
+        "Bandwidth   — analytical: %.3f GHz   discrete (-3 dB): %.3f GHz",
+        bw_cont_ghz,
+        bw_disc_ghz,
+    )
+
+    # --- plot ---
+    fig, ax = plt.subplots(figsize=(9, 4))
+    ax.plot(freqs, 20 * np.log10(np.sqrt(S31_sq) + 1e-15), label="Discrete |S31|")
+    ax.axhline(
+        20 * np.log10(np.sqrt(threshold)),
+        color="gray",
+        ls="--",
+        lw=0.8,
+        label=f"-3 dB threshold",
+    )
+    ax.axvline(
+        f_low_disc,
+        color="C1",
+        ls=":",
+        lw=1.2,
+        label=f"Discrete edges ({bw_disc_ghz:.3f} GHz)",
+    )
+    ax.axvline(f_high_disc, color="C1", ls=":", lw=1.2)
+    ax.axvline(
+        f_gap_cont - bw_cont_ghz / 2,
+        color="C2",
+        ls="--",
+        lw=1.2,
+        label=f"Analytical edges ({bw_cont_ghz:.3f} GHz)",
+    )
+    ax.axvline(f_gap_cont + bw_cont_ghz / 2, color="C2", ls="--", lw=1.2)
+    ax.set_xlabel("Frequency (GHz)")
+    ax.set_ylabel("|S31| (dB)")
+    ax.set_title("Gap bandwidth: continuous model vs discrete")
+    ax.legend(fontsize=9)
+    ax.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.show()
+
+
 if __name__ == "__main__":
     setup_logging()
 
@@ -401,3 +488,13 @@ if __name__ == "__main__":
     # track_gap_center_over_pump_frequency()
 
     continuous_vs_discrete()
+
+    # compare_gap_bandwidth()
+
+# linear in epsilon, kerr (no cross modulation, 3 wave mixing)
+# superimpose with center bandwidth
+# photon number conservation, start with pump near zero, no modulation etc
+# normalize the transfer matrices for photon flux
+
+
+# Si |Sij| = 1

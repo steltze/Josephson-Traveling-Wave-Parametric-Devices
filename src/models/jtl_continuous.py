@@ -1,59 +1,57 @@
 """
 Continuous-limit backward-wave coupled-mode model for the JTL TWPA/TWPC.
-
-Physical picture
-----------------
-Pump travels LEFT (+kp direction in +x), signal travels RIGHT (+ks).
-The pump opens a parametric stop-band (gap) at frequencies where:
-
-    ks(ωs) + kI(ωI) = kp          (backward-wave phase matching)
-    ωI = ωs + ωp                   (sideband / frequency matching)
-
-Inside the gap the signal is converted to a BACKWARD-TRAVELING idler that
-exits at the LEFT port (S21 in the 4-port S-matrix), not the right (S41).
-The coupled-mode ODEs are:
-
-    dEs/dx  = -(m_eff·kI/4)·EI     (signal driven by backward idler)
-    -dEI/dx = +(m_eff·ks/4)·Es     (idler driven by signal)
-
-These give EXPONENTIAL (cosh/sinh) solutions inside the gap — a stop-band.
-
-Effective modulation depth
---------------------------
-The JTL modulates the series inductance as
-
-    Zs(ω,t) = Zs0(ω) + Zs_harm(ω)·e^{+iΘp} + Zs_harm(ω)·e^{-iΘp}
-
-where Zs0 = iωL/(1-ω²/ωj²) and Zs_harm = iωL·ε/(1-ω²/ωj²)².
-BOTH harmonics contribute to the coupling, giving m_eff = 2·Zs_harm/Zs0:
-
-    m_eff(ω) ≈ 2ε/(1 - ω²/ωj²)
-
-(The exact expression uses the geometric mean of the signal/idler corrections,
-but this single-frequency approximation at ωs is within ~10% for typical params.)
-
-S-parameter convention
-----------------------
-The ABCD→S conversion in this code uses voltage phasors normalized to Z0=50 Ω
-for all ports. In this convention |S_ij|² is a VOLTAGE RATIO, not a photon
-flux ratio. The correct energy-conservation check (pump included) is:
-
-    Σᵢ (ωᵢ/ωₛ) |S_{i1}|²  =  1      (energy conserved with pump providing ωp per photon)
 """
 
 from __future__ import annotations
 import numpy as np
 from scipy.optimize import brentq
 
+def dispersion_bloch_with_plasma(
+    omegas: np.ndarray, omega_cutoff: float, omega_j: float
+) -> np.ndarray:
+    """Bloch wavenumber k(ω) in rad/cell — exact discrete JTL dispersion.
 
-def dispersion(omegas: np.ndarray, omega_cutoff: float) -> np.ndarray:
-    """Bloch wavenumber k(ω) in rad/cell for the LC-ladder dispersion.
-
-    k·a = 2·arcsin(ω/ωc),  valid for ω ≤ ωc.
+    k·a = arccos(1 - 2(ω/ωc)² / (1 - ω²/ωj²))
     """
-    return 2.0 * np.arcsin(
-        np.clip(np.asarray(omegas, dtype=float) / omega_cutoff, 0.0, 1.0)
-    )
+    w = np.asarray(omegas, dtype=float)
+    denom = 1.0 - (w / omega_j) ** 2
+    arg = np.clip(1.0 - 2.0 * (w / omega_cutoff) ** 2 / denom, -1.0, 1.0)
+    return np.arccos(arg)
+
+def dispersion_linear(
+    omegas: np.ndarray, omega_cutoff: float
+) -> np.ndarray:
+    """Wavenumber k(ω) in rad/cell — pure linear dispersion, no JJ.
+
+    k·a = 2ω/ωc
+    """
+    return 2.0 * np.asarray(omegas, dtype=float) / omega_cutoff
+
+def dispersion_bloch(
+    omegas: np.ndarray, omega_cutoff: float
+) -> np.ndarray:
+    """Bloch wavenumber k(ω) in rad/cell — exact discrete LC ladder, no JJ.
+
+    k·a = 2·arcsin(ω/ωc)
+    """
+    return 2.0 * np.arcsin(np.clip(np.asarray(omegas, dtype=float) / omega_cutoff, 0.0, 1.0))
+
+
+def dispersion_linear_with_plasma(
+    omegas: np.ndarray, omega_cutoff: float, omega_j: float
+) -> np.ndarray:
+    """Wavenumber k(ω) in rad/cell — continuous approximation with JJ correction.
+
+    k·a = 2ω/ωc / √(1 - ω²/ωj²)
+    """
+    w = np.asarray(omegas, dtype=float)
+    return 2.0 * w / (omega_cutoff * np.sqrt(1.0 - (w / omega_j) ** 2))
+
+def _dk_dw(omega: float, omega_cutoff: float, omega_j: float) -> float:
+    """
+    d(k·a)/dω for the continuous JTL dispersion.\
+    """
+    return 2.0 / (omega_cutoff * (1.0 - (omega / omega_j) ** 2))
 
 
 def phase_mismatch(
@@ -62,17 +60,17 @@ def phase_mismatch(
     omega_cutoff: float,
     v_pump: float,
     cell_size: float,
+    omega_j: float = np.inf,
 ) -> np.ndarray:
-    """Backward-wave phase mismatch Δk = ks + kI − kp  in rad/cell.
+    """Backward-wave phase mismatch Δk = ks + kI - kp  in rad/cell.
 
     Zero at the gap-centre frequency, positive above it, negative below.
     """
     omegas = np.asarray(omegas, dtype=float)
     omega_I = omegas + omega_pump
     kp = omega_pump * cell_size / v_pump  # rad/cell
-    valid = omega_I < omega_cutoff
-    kI = np.where(valid, dispersion(omega_I, omega_cutoff), np.nan)
-    ks = dispersion(omegas, omega_cutoff)
+    ks = dispersion_linear_with_plasma(omegas, omega_cutoff, omega_j)
+    kI = dispersion_linear_with_plasma(omega_I, omega_cutoff, omega_j)
     return ks + kI - kp
 
 
@@ -81,6 +79,7 @@ def gap_center(
     omega_cutoff: float,
     v_pump: float,
     cell_size: float,
+    omega_j: float = np.inf,
 ) -> float | None:
     """Solve ks(ωgap) + kI(ωgap + ωp) = kp for ωgap.
 
@@ -90,9 +89,9 @@ def gap_center(
 
     def residual(ws: float) -> float:
         omega_I = ws + omega_pump
-        if omega_I >= omega_cutoff or ws <= 0.0:
+        if ws <= 0.0:
             return float("nan")
-        return dispersion(ws, omega_cutoff) + dispersion(omega_I, omega_cutoff) - kp
+        return dispersion_linear_with_plasma(ws, omega_cutoff, omega_j) + dispersion_linear_with_plasma(omega_I, omega_cutoff, omega_j) - kp
 
     lo = omega_cutoff * 1e-4
     hi = (omega_cutoff - omega_pump) * 0.999
@@ -104,6 +103,35 @@ def gap_center(
     if r_lo * r_hi > 0:
         return None
     return brentq(residual, lo, hi)
+
+
+def gap_bandwidth(
+    omega_pump: float,
+    omega_cutoff: float,
+    omega_j: float,
+    epsilon: float,
+    v_pump: float,
+    cell_size: float,
+) -> tuple[float | None, float | None]:
+    """
+    Analytical stop-band bandwidth from the condition.
+    """
+    omega_gap = gap_center(omega_pump, omega_cutoff, v_pump, cell_size, omega_j)
+    if omega_gap is None:
+        return None, None
+
+    omega_I_gap = omega_gap + omega_pump
+    kS0 = dispersion_linear_with_plasma(omega_gap, omega_cutoff, omega_j)
+    kI0 = dispersion_linear_with_plasma(omega_I_gap, omega_cutoff, omega_j)
+
+    m0 = 2.0 * epsilon / (1.0 - omega_gap**2 / omega_j**2)
+    gamma = m0 / 4.0 * np.sqrt(kS0 * kI0)  # rad/cell
+
+    dkS = _dk_dw(omega_gap, omega_cutoff, omega_j)
+    dkI = _dk_dw(omega_I_gap, omega_cutoff, omega_j)
+
+    delta_omega = 4.0 * gamma / (dkS + dkI)  # rad/GHz (same units as input)
+    return omega_gap, delta_omega
 
 
 def manual_solution(
@@ -126,22 +154,18 @@ def manual_solution(
     valid = omega_I < omega_cutoff
     omega_I_c = np.where(valid, omega_I, omega_cutoff * 0.9999)
 
-    gap_center_freq = omega_pump / 2.0 * (v_ratio - 1.0)
-    delta = gap_center_freq - omegas  # detuning from gap centre
     v_signal = cell_size * omega_cutoff / 2
-
-    kS = dispersion(omegas, omega_cutoff)  # rad/cell (Bloch)
-    kI = dispersion(omega_I_c, omega_cutoff)  # rad/cell (Bloch)
     v_pump = v_signal / v_ratio
+
+    kS = dispersion_linear(omegas, omega_cutoff)  # rad/cell (Bloch)
+    kI = dispersion_linear(omega_I_c, omega_cutoff)  # rad/cell (Bloch)
     kp = omega_pump * cell_size / v_pump  # rad/cell
 
     kappa = -kp + kS + kI  # = Δk, rad/cell
 
-    # kappa = 2.0 * delta / v_signal * cell_size
+    m_eff = 2.0 * epsilon / (1.0 - omegas**2 / omega_j**2)  # = 2·Zs_harm/Zs0
 
-    m = 2.0 * epsilon / (1.0 - omegas**2 / omega_j**2)
-
-    q = -m / 4 * np.emath.sqrt((kS - kappa) * (kI + kappa))  # rad/cell
+    q = -m_eff / 4 * np.emath.sqrt((kS - kappa) * (kI + kappa))  # rad/cell
 
     L = ncell  # cells (not metres)
 
@@ -159,4 +183,4 @@ def manual_solution(
         )
         ** 2,
         np.nan,
-    )
+    ), np.zeros(len(omegas))
