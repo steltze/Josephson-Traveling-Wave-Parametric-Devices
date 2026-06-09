@@ -1,186 +1,211 @@
 """
-Continuous-limit backward-wave coupled-mode model for the JTL TWPA/TWPC.
+Continuous coupled-mode backward-wave model for the JTL TWPA/TWPC.
 """
 
 from __future__ import annotations
+
 import numpy as np
 from scipy.optimize import brentq
 
-def dispersion_bloch_with_plasma(
-    omegas: np.ndarray, omega_cutoff: float, omega_j: float
-) -> np.ndarray:
-    """Bloch wavenumber k(ω) in rad/cell — exact discrete JTL dispersion.
+from solver.s_matrix import SMatrix
+from analysis.s_parameters import plot_s_parameters as _plot_s_params
 
-    k·a = arccos(1 - 2(ω/ωc)² / (1 - ω²/ωj²))
-    """
-    w = np.asarray(omegas, dtype=float)
-    denom = 1.0 - (w / omega_j) ** 2
-    arg = np.clip(1.0 - 2.0 * (w / omega_cutoff) ** 2 / denom, -1.0, 1.0)
-    return np.arccos(arg)
+
+# ---------------------------------------------------------------------------
+# Dispersion relations — uniform signature (omegas, omega_cutoff, omega_j)
+# ---------------------------------------------------------------------------
 
 def dispersion_linear(
-    omegas: np.ndarray, omega_cutoff: float
+    omegas: np.ndarray, omega_cutoff: float, omega_j: float = np.inf
 ) -> np.ndarray:
-    """Wavenumber k(ω) in rad/cell — pure linear dispersion, no JJ.
-
-    k·a = 2ω/ωc
-    """
+    """k·a = 2ω/ωc  (pure linear, no JJ)."""
     return 2.0 * np.asarray(omegas, dtype=float) / omega_cutoff
-
-def dispersion_bloch(
-    omegas: np.ndarray, omega_cutoff: float
-) -> np.ndarray:
-    """Bloch wavenumber k(ω) in rad/cell — exact discrete LC ladder, no JJ.
-
-    k·a = 2·arcsin(ω/ωc)
-    """
-    return 2.0 * np.arcsin(np.clip(np.asarray(omegas, dtype=float) / omega_cutoff, 0.0, 1.0))
 
 
 def dispersion_linear_with_plasma(
     omegas: np.ndarray, omega_cutoff: float, omega_j: float
 ) -> np.ndarray:
-    """Wavenumber k(ω) in rad/cell — continuous approximation with JJ correction.
-
-    k·a = 2ω/ωc / √(1 - ω²/ωj²)
-    """
+    """k·a = 2ω/ωc / √(1 - ω²/ωj²)  (linear + JJ correction)."""
     w = np.asarray(omegas, dtype=float)
     return 2.0 * w / (omega_cutoff * np.sqrt(1.0 - (w / omega_j) ** 2))
 
-def _dk_dw(omega: float, omega_cutoff: float, omega_j: float) -> float:
-    """
-    d(k·a)/dω for the continuous JTL dispersion.\
-    """
-    return 2.0 / (omega_cutoff * (1.0 - (omega / omega_j) ** 2))
 
-
-def phase_mismatch(
-    omegas: np.ndarray,
-    omega_pump: float,
-    omega_cutoff: float,
-    v_pump: float,
-    cell_size: float,
-    omega_j: float = np.inf,
+def dispersion_bloch(
+    omegas: np.ndarray, omega_cutoff: float, omega_j: float = np.inf
 ) -> np.ndarray:
-    """Backward-wave phase mismatch Δk = ks + kI - kp  in rad/cell.
-
-    Zero at the gap-centre frequency, positive above it, negative below.
-    """
-    omegas = np.asarray(omegas, dtype=float)
-    omega_I = omegas + omega_pump
-    kp = omega_pump * cell_size / v_pump  # rad/cell
-    ks = dispersion_linear_with_plasma(omegas, omega_cutoff, omega_j)
-    kI = dispersion_linear_with_plasma(omega_I, omega_cutoff, omega_j)
-    return ks + kI - kp
+    """k·a = 2·arcsin(ω/ωc)  (exact discrete LC ladder, no JJ)."""
+    return 2.0 * np.arcsin(
+        np.clip(np.asarray(omegas, dtype=float) / omega_cutoff, 0.0, 1.0)
+    )
 
 
-def gap_center(
-    omega_pump: float,
-    omega_cutoff: float,
-    v_pump: float,
-    cell_size: float,
-    omega_j: float = np.inf,
-) -> float | None:
-    """Solve ks(ωgap) + kI(ωgap + ωp) = kp for ωgap.
-
-    Returns None if no solution exists.
-    """
-    kp = omega_pump * cell_size / v_pump
-
-    def residual(ws: float) -> float:
-        omega_I = ws + omega_pump
-        if ws <= 0.0:
-            return float("nan")
-        return dispersion_linear_with_plasma(ws, omega_cutoff, omega_j) + dispersion_linear_with_plasma(omega_I, omega_cutoff, omega_j) - kp
-
-    lo = omega_cutoff * 1e-4
-    hi = (omega_cutoff - omega_pump) * 0.999
-    if hi <= lo:
-        return None
-    r_lo, r_hi = residual(lo), residual(hi)
-    if not (np.isfinite(r_lo) and np.isfinite(r_hi)):
-        return None
-    if r_lo * r_hi > 0:
-        return None
-    return brentq(residual, lo, hi)
-
-
-def gap_bandwidth(
-    omega_pump: float,
-    omega_cutoff: float,
-    omega_j: float,
-    epsilon: float,
-    v_pump: float,
-    cell_size: float,
-) -> tuple[float | None, float | None]:
-    """
-    Analytical stop-band bandwidth from the condition.
-    """
-    omega_gap = gap_center(omega_pump, omega_cutoff, v_pump, cell_size, omega_j)
-    if omega_gap is None:
-        return None, None
-
-    omega_I_gap = omega_gap + omega_pump
-    kS0 = dispersion_linear_with_plasma(omega_gap, omega_cutoff, omega_j)
-    kI0 = dispersion_linear_with_plasma(omega_I_gap, omega_cutoff, omega_j)
-
-    m0 = 2.0 * epsilon / (1.0 - omega_gap**2 / omega_j**2)
-    gamma = m0 / 4.0 * np.sqrt(kS0 * kI0)  # rad/cell
-
-    dkS = _dk_dw(omega_gap, omega_cutoff, omega_j)
-    dkI = _dk_dw(omega_I_gap, omega_cutoff, omega_j)
-
-    delta_omega = 4.0 * gamma / (dkS + dkI)  # rad/GHz (same units as input)
-    return omega_gap, delta_omega
-
-
-def manual_solution(
-    omegas: np.ndarray,
-    omega_pump: float,
-    omega_cutoff: float,
-    omega_j: float,
-    epsilon: float,
-    ncell: int,
-    cell_size: float,
-    v_ratio: float,
+def dispersion_bloch_with_plasma(
+    omegas: np.ndarray, omega_cutoff: float, omega_j: float
 ) -> np.ndarray:
-    """Backward-wave BVP using Bloch dispersion and v_ratio.
+    """k·a = arccos(1 - 2(ω/ωc)² / (1 - ω²/ωj²))  (full discrete JTL)."""
+    w = np.asarray(omegas, dtype=float)
+    denom = 1.0 - (w / omega_j) ** 2
+    arg = np.clip(1.0 - 2.0 * (w / omega_cutoff) ** 2 / denom, -1.0, 1.0)
+    return np.arccos(arg)
 
-    Gap centre (linear approx): ωgap = ωp/2·(v_ratio - 1).
-    Returns |S31|².
+
+# ---------------------------------------------------------------------------
+# JTLContinuous class
+# ---------------------------------------------------------------------------
+
+class JTLContinuous:
     """
-    omegas = np.asarray(omegas, dtype=float)
-    omega_I = omegas + omega_pump
-    valid = omega_I < omega_cutoff
-    omega_I_c = np.where(valid, omega_I, omega_cutoff * 0.9999)
+    Continuous coupled-mode backward-wave TWPA/TWPC model.
 
-    v_signal = cell_size * omega_cutoff / 2
-    v_pump = v_signal / v_ratio
+    Provides the same public interface as Simulation (get_s_matrix,
+    plot_s_parameters) so it can be used alongside JTLDiscrete results.
 
-    kS = dispersion_linear(omegas, omega_cutoff)  # rad/cell (Bloch)
-    kI = dispersion_linear(omega_I_c, omega_cutoff)  # rad/cell (Bloch)
-    kp = omega_pump * cell_size / v_pump  # rad/cell
+    The dispersion relation used for signal/idler k-vectors is a swappable
+    class variable.  Use with_dispersion() to select a variant:
 
-    kappa = -kp + kS + kI  # = Δk, rad/cell
+        sim = JTLContinuous(cfg)
+        sim = JTLContinuous.with_dispersion(dispersion_linear)(cfg)
 
-    m_eff = 2.0 * epsilon / (1.0 - omegas**2 / omega_j**2)  # = 2·Zs_harm/Zs0
+    Dispersion options (all in models/jtl_continuous.py):
+        dispersion_linear               k = 2ω/ωc
+        dispersion_linear_with_plasma   k = 2ω/ωc / √(1-ω²/ωj²)
+        dispersion_bloch                k = 2·arcsin(ω/ωc)
+        dispersion_bloch_with_plasma    k = arccos(1-2(ω/ωc)²/(1-ω²/ωj²))
+    """
 
-    q = -m_eff / 4 * np.emath.sqrt((kS - kappa) * (kI + kappa))  # rad/cell
+    dispersion_fn = staticmethod(dispersion_bloch_with_plasma)
 
-    L = ncell  # cells (not metres)
+    def __init__(self, config) -> None:
+        self._cfg = config
+        self._S_cache: SMatrix | None = None
 
-    Delta = q**2 - (kappa / 2.0) ** 2
-    Delta_sqrt = np.emath.sqrt(Delta)  # real inside gap
+    @classmethod
+    def with_dispersion(cls, fn) -> type:
+        """Return a subclass that uses *fn* as its dispersion relation."""
+        class _Variant(cls):
+            dispersion_fn = staticmethod(fn)
+        _Variant.__name__ = f"JTLContinuous[{fn.__name__}]"
+        return _Variant
 
-    return np.where(
-        valid,
-        np.abs(
-            1
-            / (
-                np.cosh(Delta_sqrt * L)
-                + 0.5j * kappa / Delta_sqrt * np.sinh(Delta_sqrt * L)
-            )
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _k(self, omegas: np.ndarray) -> np.ndarray:
+        return self.dispersion_fn(omegas, self._cfg.omega_cutoff, self._cfg.omega_j)
+
+    def _dk(self, omega: float) -> float:
+        """Numerical d(k·a)/dω via central difference."""
+        eps = max(abs(omega) * 1e-7, 1e-10)
+        return float(
+            (self._k(np.float64(omega + eps)) - self._k(np.float64(omega - eps)))
+            / (2.0 * eps)
         )
-        ** 2,
-        np.nan,
-    ), np.zeros(len(omegas))
+
+    # ------------------------------------------------------------------
+    # Analytical quantities
+    # ------------------------------------------------------------------
+
+    def phase_mismatch(self, omegas: np.ndarray | None = None) -> np.ndarray:
+        """Δk = ks + kI - kp in rad/cell. Zero at the gap centre."""
+        cfg = self._cfg
+        if omegas is None:
+            omegas = cfg.omegas
+        omegas = np.asarray(omegas, dtype=float)
+        kp = cfg.omega_pump * cfg.cell_size / cfg.v_pump
+        return self._k(omegas) + self._k(omegas + cfg.omega_pump) - kp
+
+    def gap_center(self) -> float | None:
+        """Solve ks(ωg) + kI(ωg+ωp) = kp. Returns None if no solution."""
+        cfg = self._cfg
+        kp = cfg.omega_pump * cfg.cell_size / cfg.v_pump
+
+        def residual(ws: float) -> float:
+            if ws <= 0.0:
+                return float("nan")
+            return float(
+                self._k(np.float64(ws))
+                + self._k(np.float64(ws + cfg.omega_pump))
+                - kp
+            )
+
+        lo = cfg.omega_cutoff * 1e-4
+        hi = (cfg.omega_cutoff - cfg.omega_pump) * 0.999
+        if hi <= lo:
+            return None
+        r_lo, r_hi = residual(lo), residual(hi)
+        if not (np.isfinite(r_lo) and np.isfinite(r_hi)):
+            return None
+        if r_lo * r_hi > 0:
+            return None
+        return brentq(residual, lo, hi)
+
+    def gap_bandwidth(self) -> tuple[float | None, float | None]:
+        """Analytical stop-band bandwidth Δω = 4γ / (dks/dω + dkI/dω)."""
+        cfg = self._cfg
+        omega_gap = self.gap_center()
+        if omega_gap is None:
+            return None, None
+
+        omega_I_gap = omega_gap + cfg.omega_pump
+        kS0 = float(self._k(np.float64(omega_gap)))
+        kI0 = float(self._k(np.float64(omega_I_gap)))
+
+        m0 = 2.0 * cfg.epsilon / (1.0 - omega_gap ** 2 / cfg.omega_j ** 2)
+        gamma = m0 / 4.0 * np.sqrt(kS0 * kI0)
+
+        delta_omega = 4.0 * gamma / (self._dk(omega_gap) + self._dk(omega_I_gap))
+        return omega_gap, delta_omega
+
+    # ------------------------------------------------------------------
+    # S-matrix (BVP solution)
+    # ------------------------------------------------------------------
+
+    def get_s_matrix(self) -> SMatrix:
+        """Compute and cache the S-matrix from the coupled-mode BVP."""
+        if self._S_cache is None:
+            self._S_cache = self._compute_s_matrix()
+        return self._S_cache
+
+    def _compute_s_matrix(self) -> SMatrix:
+        cfg = self._cfg
+        omegas = cfg.omegas
+        omega_I = omegas + cfg.omega_pump
+        valid = omega_I < cfg.omega_cutoff
+        omega_I_c = np.where(valid, omega_I, cfg.omega_cutoff * 0.9999)
+
+        kS = self._k(omegas)
+        kI = self._k(omega_I_c)
+        kp = cfg.omega_pump * cfg.cell_size / cfg.v_pump
+        kappa = kS + kI - kp
+
+        m_eff = 2.0 * cfg.epsilon / (1.0 - omegas ** 2 / cfg.omega_j ** 2)
+        q = -m_eff / 4.0 * np.emath.sqrt((kS - kappa) * (kI + kappa))
+
+        N = cfg.ncell
+        Delta = q ** 2 - (kappa / 2.0) ** 2
+        Delta_sqrt = np.emath.sqrt(Delta)
+
+        S31 = np.where(
+            valid,
+            1.0 / (
+                np.cosh(Delta_sqrt * N)
+                + 0.5j * kappa / Delta_sqrt * np.sinh(Delta_sqrt * N)
+            ),
+            np.nan + 0j,
+        )
+
+        Nf = len(omegas)
+        data = np.zeros((Nf, 4, 4), dtype=complex)
+        data[:, 2, 0] = S31
+        return SMatrix(data, cfg.Z0)
+
+    # ------------------------------------------------------------------
+    # Plotting
+    # ------------------------------------------------------------------
+
+    def plot_s_parameters(self, params, ax=None, **kwargs):
+        """Plot selected S-parameters in dB. params: list of (i,j) 1-based pairs."""
+        return _plot_s_params(
+            self.get_s_matrix().array, self._cfg.freqs, params, ax=ax, **kwargs
+        )

@@ -5,7 +5,7 @@ from logger import get_logger, setup_logging
 
 log = get_logger(__name__)
 from simulation import SimulationConfig, Simulation
-from models import JTLDiscrete, jtl_continuous
+from models import JTLDiscrete, JTLContinuous
 from symbolic import CellSingleMode
 from analysis.checks import (
     check_photon_conservation,
@@ -283,31 +283,20 @@ def continuous_vs_discrete():
     )
 
     # --- continuous ---
+    sim_cont = JTLContinuous(cfg)
+    S_cont = sim_cont.get_s_matrix().array
+    S31_cont = np.abs(S_cont[:, 2, 0]) ** 2
+    S21_cont = np.abs(S_cont[:, 1, 0]) ** 2
 
-    S31_cont, S21_cont = jtl_continuous.manual_solution(
-        omegas=omegas,
-        omega_pump=cfg.omega_pump,
-        omega_cutoff=cfg.omega_cutoff,
-        omega_j=cfg.omega_j,
-        epsilon=cfg.epsilon,
-        ncell=cfg.ncell,
-        cell_size=cfg.cell_size,
-        v_ratio=2.5,
-    )
-
-    delta_k = jtl_continuous.phase_mismatch(
-        omegas, cfg.omega_pump, cfg.omega_cutoff, cfg.v_pump, cfg.cell_size, cfg.omega_j
-    )
-    gap_freq = jtl_continuous.gap_center(
-        cfg.omega_pump, cfg.omega_cutoff, cfg.v_pump, cfg.cell_size, cfg.omega_j
-    )
+    delta_k = sim_cont.phase_mismatch(omegas)
+    gap_freq = sim_cont.gap_center()
 
     log.info(
         "Analytical gap centre: %.3f GHz   (discrete gap: find min of |S31|)",
         gap_freq / (2 * np.pi) if gap_freq is not None else float("nan"),
     )
 
-    energy_cont = (omegas / omega_I) * S21_cont + S31_cont
+    energy_cont = (omegas / omega_I) * S21_cont + S31_cont  # S21 = 0 in cont. model
 
     # --- 2×2 comparison plot ---
     fig, axes = plt.subplots(2, 2, figsize=(13, 8), sharex=True)
@@ -423,14 +412,8 @@ def compare_gap_bandwidth():
         f_low_disc = f_high_disc = bw_disc_ghz = float("nan")
 
     # --- analytical: Δω = 4γ / (dkS/dω + dkI/dω) ---
-    omega_gap, delta_omega = jtl_continuous.gap_bandwidth(
-        cfg.omega_pump,
-        cfg.omega_cutoff,
-        cfg.omega_j,
-        cfg.epsilon,
-        cfg.v_pump,
-        cfg.cell_size,
-    )
+    sim_cont = JTLContinuous(cfg)
+    omega_gap, delta_omega = sim_cont.gap_bandwidth()
     bw_cont_ghz = delta_omega / (2 * np.pi) if delta_omega is not None else float("nan")
     f_gap_cont = omega_gap / (2 * np.pi) if omega_gap is not None else float("nan")
 
