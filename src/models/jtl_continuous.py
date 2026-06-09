@@ -177,10 +177,10 @@ class JTLContinuous:
         kS = self._k(omegas)
         kI = self._k(omega_I_c)
         kp = cfg.omega_pump * cfg.cell_size / cfg.v_pump
-        kappa = kS + kI - kp
+        kappa = kS + kI - kp # ks + kp = ki but kp, ki < 0 so we do -kp, -(-ki)
 
         m_eff = 2.0 * cfg.epsilon / (1.0 - omegas ** 2 / cfg.omega_j ** 2)
-        q = -m_eff / 4.0 * np.emath.sqrt((kS - kappa) * (kI + kappa))
+        q = -m_eff / 4.0 * np.emath.sqrt((kS) * (kI)) # no corrections added, (kS - kappa) * (kI + kappa)
 
         N = cfg.ncell
         Delta = q ** 2 - (kappa / 2.0) ** 2
@@ -188,16 +188,24 @@ class JTLContinuous:
 
         S31 = np.where(
             valid,
-            1.0 / (
+            np.exp(-0.5j*kappa*N) / (
                 np.cosh(Delta_sqrt * N)
                 + 0.5j * kappa / Delta_sqrt * np.sinh(Delta_sqrt * N)
             ),
             np.nan + 0j,
         )
 
+        gS = m_eff / 4.0 * kS # no correction added, kI / (kI + kappa)
+        S21 = np.where(
+            valid,
+            np.exp(0.5j*kappa*N) * gS / Delta_sqrt * np.sinh(Delta_sqrt * N) * S31,
+            np.nan + 0j,
+        )
+
         Nf = len(omegas)
         data = np.zeros((Nf, 4, 4), dtype=complex)
         data[:, 2, 0] = S31
+        data[:, 1, 0] = S21
         return SMatrix(data, cfg.Z0)
 
     # ------------------------------------------------------------------
