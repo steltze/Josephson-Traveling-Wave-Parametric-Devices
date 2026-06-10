@@ -9,6 +9,9 @@ from scipy.optimize import brentq
 
 from solver.s_matrix import SMatrix
 from analysis.s_parameters import plot_s_parameters as _plot_s_params
+from logger import get_logger
+
+_log = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -60,10 +63,11 @@ class JTLContinuous:
     Provides the same public interface as Simulation (get_s_matrix,
     plot_s_parameters) so it can be used alongside JTLDiscrete results.
 
-    The dispersion relation used for signal/idler k-vectors is a swappable
-    class variable.  Use with_dispersion() to select a variant:
+    The dispersion relation used for signal/idler k-vectors is swappable.
+    Pass it as a constructor argument or use with_dispersion() for a subclass:
 
         sim = JTLContinuous(cfg)
+        sim = JTLContinuous(cfg, dispersion_fn=dispersion_bloch)
         sim = JTLContinuous.with_dispersion(dispersion_linear)(cfg)
 
     Dispersion options (all in models/jtl_continuous.py):
@@ -75,9 +79,21 @@ class JTLContinuous:
 
     dispersion_fn = staticmethod(dispersion_bloch_with_plasma)
 
-    def __init__(self, config) -> None:
+    _DISPERSION_LABELS = {
+        "dispersion_linear": "linear dispersion",
+        "dispersion_linear_with_plasma": "linear dispersion with plasma correction",
+        "dispersion_bloch": "Bloch dispersion",
+        "dispersion_bloch_with_plasma": "Bloch dispersion with plasma correction",
+    }
+
+    def __init__(self, config, dispersion_fn=None) -> None:
         self._cfg = config
         self._S_cache: SMatrix | None = None
+        if dispersion_fn is not None:
+            self.dispersion_fn = dispersion_fn
+        fn = self.dispersion_fn
+        label = self._DISPERSION_LABELS.get(fn.__name__, fn.__name__)
+        _log.info("Using %s on the continuous model.", label)
 
     @classmethod
     def with_dispersion(cls, fn) -> type:
