@@ -319,24 +319,23 @@ def continuous_vs_discrete():
     kI = np.where(valid_I, dispersion_fn(
         np.where(valid_I, omega_I, oc * 0.9999), oc, oj), np.nan)
     w_idler = kI / kS  # quasi-photon (k) weight for idler ports
+    plasma_ratio = (1 - omegas**2/cfg.omega_j**2) / (1 - omega_I**2/cfg.omega_j**2)
 
 
     # --- discrete ---
     sim = Simulation(JTLDiscrete, cfg)
     S = sim.get_s_matrix().array  # (Nf, 4, 4), 0-indexed
     S31_disc = np.abs(S[:, 2, 0]) ** 2
-    S21_disc = (np.abs(S[:, 1, 0]) ** 2)*(omega_I/omegas)
+    S21_disc = (np.abs(S[:, 1, 0]) ** 2)*(omega_I/omegas) * (plasma_ratio ** 2)
     S11_disc = np.abs(S[:, 0, 0]) ** 2
-    S41_disc = (np.abs(S[:, 3, 0]) ** 2)*(omega_I/omegas)
+    S41_disc = (np.abs(S[:, 3, 0]) ** 2)*(omega_I/omegas) * (plasma_ratio ** 2)
 
     vg_s = (cfg.omega_cutoff / 2) * np.sqrt(1 - (omegas / cfg.omega_cutoff)**2)
     vg_i = (cfg.omega_cutoff / 2) * np.sqrt(1 - (omega_I / cfg.omega_cutoff)**2)
     Zs = 50/ np.sqrt(1 - (omegas/cfg.omega_j)**2)
     Zi = 50/ np.sqrt(1 - (omega_I/cfg.omega_j)**2)
 
-    plasma_ratio = (1 - omegas**2/cfg.omega_j**2) / (1 - omega_I**2/cfg.omega_j**2)
-    factor = plasma_ratio ** 2
-    print(factor.max())
+    factor = 1.0
     energy_disc = (
         factor * S21_disc
         + S31_disc
