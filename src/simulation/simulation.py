@@ -95,10 +95,10 @@ class Simulation:
                     S_total = redheffer_star(S_cells[:, c], S_total)
                 self._S_matrix = SMatrix(S_total, self._cfg.Z0)
 
-                self._S_matrix.array[:, 1, 0] /= np.sqrt((self._cfg.omegas/(self._cfg.omegas + self._cfg.omega_pump)))
-                self._S_matrix.array[:, 3, 0] /= np.sqrt((self._cfg.omegas/(self._cfg.omegas + self._cfg.omega_pump)))
+                # self._S_matrix.array[:, 1, 0] /= np.sqrt((self._cfg.omegas/(self._cfg.omegas + self._cfg.omega_pump)))
+                # self._S_matrix.array[:, 3, 0] /= np.sqrt((self._cfg.omegas/(self._cfg.omegas + self._cfg.omega_pump)))
 
-                self._S_matrix.array[:, 2, 3] *= np.sqrt((self._cfg.omegas/(self._cfg.omegas + self._cfg.omega_pump)))
+                # self._S_matrix.array[:, 2, 3] *= np.sqrt((self._cfg.omegas/(self._cfg.omegas + self._cfg.omega_pump)))
 
         return self._S_matrix
 

@@ -313,7 +313,7 @@ def continuous_vs_discrete():
 
     # Bloch wavenumbers for quasi-photon conservation: weight = kI/kS for idler ports
     oc, oj = cfg.omega_cutoff, cfg.omega_j
-    dispersion_fn = dispersion_bloch
+    dispersion_fn = dispersion_bloch_with_plasma
     kS = dispersion_fn(omegas, oc, oj)
     valid_I = omega_I < oc
     kI = np.where(valid_I, dispersion_fn(
@@ -324,19 +324,19 @@ def continuous_vs_discrete():
     # --- discrete ---
     sim = Simulation(JTLDiscrete, cfg)
     S = sim.get_s_matrix().array  # (Nf, 4, 4), 0-indexed
-    print(np.abs(S))
     S31_disc = np.abs(S[:, 2, 0]) ** 2
-    S21_disc = np.abs(S[:, 1, 0]) ** 2
+    S21_disc = (np.abs(S[:, 1, 0]) ** 2)*(omega_I/omegas)
     S11_disc = np.abs(S[:, 0, 0]) ** 2
-    S41_disc = np.abs(S[:, 3, 0]) ** 2
+    S41_disc = (np.abs(S[:, 3, 0]) ** 2)*(omega_I/omegas)
 
     vg_s = (cfg.omega_cutoff / 2) * np.sqrt(1 - (omegas / cfg.omega_cutoff)**2)
     vg_i = (cfg.omega_cutoff / 2) * np.sqrt(1 - (omega_I / cfg.omega_cutoff)**2)
-    Zs = 50/ np.sqrt(1 - (omegas/cfg.omega_cutoff)**2)
-    Zi = 50/ np.sqrt(1 - (omega_I/cfg.omega_cutoff)**2)
+    Zs = 50/ np.sqrt(1 - (omegas/cfg.omega_j)**2)
+    Zi = 50/ np.sqrt(1 - (omega_I/cfg.omega_j)**2)
 
-    factor = 1.0
-    
+    plasma_ratio = (1 - omegas**2/cfg.omega_j**2) / (1 - omega_I**2/cfg.omega_j**2)
+    factor = plasma_ratio ** 2
+    print(factor.max())
     energy_disc = (
         factor * S21_disc
         + S31_disc
@@ -358,7 +358,7 @@ def continuous_vs_discrete():
         gap_freq / (2 * np.pi) if gap_freq is not None else float("nan"),
     )
 
-    energy_cont = factor * S21_cont + S31_cont
+    energy_cont = S21_cont + S31_cont
 
     # --- 2×2 comparison plot ---
     fig, axes = plt.subplots(2, 2, figsize=(13, 8), sharex=True)
@@ -423,7 +423,7 @@ def continuous_vs_discrete():
     ax_en.axhline(1.0, color="k", lw=0.8, ls="--", label="ideal = 1")
     _vline(ax_en)
     ax_en.set_xlabel("Frequency (GHz)")
-    ax_en.set_ylabel("(ωI/ωs)·|S21|² + |S31|²")
+    ax_en.set_ylabel("|S21|² + |S31|²")
     ax_en.set_title("Energy conservation check  (= 1 with pump)")
     ax_en.legend(fontsize=9)
     ax_en.grid(True, alpha=0.3)
