@@ -78,7 +78,7 @@ def ABCD_to_S(ABCD: np.ndarray, Z0: float) -> np.ndarray:
 
     Z = np.empty((Nf, N, N), dtype=complex)
     Z[:, :k, :k] = A @ Cinv
-    Z[:, :k, k:] = A @ CinvD - B
+    Z[:, :k, k:] = (A @ D - B @ C) @ Cinv   # = (AD - BC) C^{-1}
     Z[:, k:, :k] = Cinv
     Z[:, k:, k:] = CinvD
 
@@ -166,41 +166,43 @@ class SMatrix:
         omegas: np.ndarray,
         ks_state: list[int],
         omega_pump: float,
+        port_ks: np.ndarray | None = None,
     ) -> "SMatrix":
         """
-        Re-normalize from energy-flux to photon-flux basis.
+        Re-normalize to quasi-photon-flux basis for a Bloch-mode S-matrix.
 
-        Applies  S_ph = D⁻¹ @ S @ D,  where D_kk = √ω_k and ω_k is the
-        angular frequency at port k.  After this, |S_ij|² is the ratio of
-        photon fluxes (output at port i / input at port j) rather than power.
+        Applies  S_ph = D⁻¹ @ S @ D  so that Σᵢ |S_ph[i,j]|² = 1.
 
-        For a lossless frequency converter where one signal photon (ω_s) becomes
-        one idler photon (ω_i), the energy S-param gives |S|² = ω_i/ω_s ≠ 1,
-        but the photon-normalized |S_ph|² = 1.
-
-        Port layout expected: [mode-0-left, mode-1-left, ..., mode-0-right, ...]
-        where mode k carries frequency  omegas + ks_state[k] * omega_pump.
+        For an ABCD→S matrix normalised to uniform Z0, the correct weight is
+        the Bloch wavenumber k, not the frequency ω.  Pass port_ks to use
+        k-weights; without it falls back to ω-weights (free-space convention).
 
         Parameters
         ----------
         omegas : ndarray, shape (Nf,)
-            Signal angular frequencies (rad/s or rad/GHz — same units as omega_pump).
+            Signal angular frequencies.
         ks_state : list[int]
             Sideband indices.
         omega_pump : float
             Pump angular frequency.
+        port_ks : ndarray, shape (Nf, N), optional
+            Bloch wavenumber per port.  When given, D_kk = √k_k.
+            When omitted, D_kk = √ω_k (free-space convention).
         """
         Nk = len(ks_state)
         if self.N != 2 * Nk:
             raise ValueError(
                 f"Port count N={self.N} is inconsistent with 2*len(ks_state)={2 * Nk}"
             )
-        ks = np.asarray(ks_state)
-        port_omegas_half = omegas[:, None] + ks[None, :] * omega_pump  # (Nf, Nk)
-        port_omegas = np.concatenate([port_omegas_half, port_omegas_half], axis=1)  # (Nf, N)
-        sqrt_omega = np.sqrt(port_omegas)  # (Nf, N)
-        # (D⁻¹ S D)_ij = S_ij * √ω_j / √ω_i
-        S_ph = self._data * (sqrt_omega[:, None, :] / sqrt_omega[:, :, None])
+        if port_ks is not None:
+            sqrt_w = np.sqrt(port_ks)  # (Nf, N)
+        else:
+            ks = np.asarray(ks_state)
+            port_omegas_half = omegas[:, None] + ks[None, :] * omega_pump  # (Nf, Nk)
+            port_omegas = np.concatenate([port_omegas_half, port_omegas_half], axis=1)
+            sqrt_w = np.sqrt(port_omegas)  # (Nf, N)
+        # (D⁻¹ S D)_ij = S_ij * √w_j / √w_i
+        S_ph = self._data * (sqrt_w[:, None, :] / sqrt_w[:, :, None])
         return SMatrix(S_ph, self.Z0)
 
     def __repr__(self) -> str:

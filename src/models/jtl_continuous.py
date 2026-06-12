@@ -196,6 +196,8 @@ class JTLContinuous:
         kappa = kS + kI - kp # ks + kp = ki but kp, ki < 0 so we do -kp, -(-ki)
 
         m_eff = 2.0 * cfg.epsilon / (1.0 - omegas ** 2 / cfg.omega_j ** 2)
+        # m_eff = 2.0 * cfg.epsilon
+
         q = -m_eff / 4.0 * np.emath.sqrt((kS) * (kI)) # no corrections added, (kS - kappa) * (kI + kappa)
 
         N = cfg.ncell
@@ -221,7 +223,7 @@ class JTLContinuous:
         Nf = len(omegas)
         data = np.zeros((Nf, 4, 4), dtype=complex)
         data[:, 2, 0] = S31
-        data[:, 1, 0] = S21
+        data[:, 1, 0] = S21 * np.sqrt(kI/kS)
         return SMatrix(data, cfg.Z0)
 
     # ------------------------------------------------------------------

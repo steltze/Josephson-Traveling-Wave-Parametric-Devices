@@ -6,6 +6,7 @@ from logger import get_logger, setup_logging
 log = get_logger(__name__)
 from simulation import SimulationConfig, Simulation
 from models import JTLDiscrete, JTLContinuous
+from models.jtl_continuous import dispersion_bloch_with_plasma, dispersion_bloch, dispersion_linear, dispersion_linear_with_plasma
 from symbolic import CellSingleMode
 from analysis.checks import (
     check_photon_conservation,
@@ -88,14 +89,23 @@ def julia_comparison():
 
     _, _ = check_transfer_matrix_determinant(T_grid, tolerance=1e-12)
 
+    # Build port wavenumber array (Nf, N) for k-weighted photon check
+    _ws = cfg.omegas
+    _wI = _ws + cfg.omega_pump
+    _oc, _oj = cfg.omega_cutoff, cfg.omega_j
+    _kS = dispersion_bloch_with_plasma(_ws, _oc, _oj)
+    _kI = np.where(_wI < _oc, dispersion_bloch_with_plasma(_wI, _oc, _oj), np.nan)
+    _port_ks = np.column_stack([_kS, _kI, _kS, _kI])  # [sig_L, idl_L, sig_R, idl_R]
+
     _, axes_phot = plt.subplots(1, 2, figsize=(12, 4))
     check_photon_conservation(
-        S_matrix, cfg.omegas, cfg.omega_pump, cfg.ks_state, ax=axes_phot[0]
+        S_matrix, cfg.omegas, cfg.omega_pump, cfg.ks_state,
+        port_ks=_port_ks, ax=axes_phot[0],
     )
     check_energy_conservation(
         S_matrix, cfg.omegas, cfg.omega_pump, cfg.ks_state, ax=axes_phot[1]
     )
-    axes_phot[0].set_title("Photon check  (= 1 only for passive)")
+    axes_phot[0].set_title("Quasi-photon check  (= 1 for lossless)")
     plt.tight_layout()
 
     # check_pump_photon_balance(S_matrix, cfg.omegas, cfg.omega_pump, cfg.ks_state)
@@ -188,6 +198,13 @@ def track_gap_center_over_pump_frequency():
     n_freqs = 500
     signal_freqs = np.linspace(freq_min, freq_max, n_freqs) * 2 * np.pi
 
+    window_ghz = 1.0
+    df = (freq_max - freq_min) / (n_freqs - 1)  # GHz per point
+    window_half = int(window_ghz / df)
+    n_window = 2 * window_half
+    freq_offset_axis = np.arange(-window_half, window_half) * df  # GHz
+    phot_cons_window = np.full((len(pump_frequencies), n_window), np.nan)
+
     for index, w_p in enumerate(pump_frequencies):
         cfg = SimulationConfig(
             Z0=50,
@@ -211,8 +228,20 @@ def track_gap_center_over_pump_frequency():
         )
 
         sim = Simulation(JTLDiscrete, cfg)
-        gap_min_index = np.abs(sim.get_s_matrix().array)[:, 2, 0].argmin()
+        smat = sim.get_s_matrix()
+        gap_min_index = np.abs(smat.array)[:, 2, 0].argmin()
         gap_min[index] = signal_freqs[gap_min_index] / 2 / np.pi
+
+        fig_tmp, ax_tmp = plt.subplots()
+        check = check_photon_conservation(smat.array, signal_freqs, w_p, ks_state, ax=ax_tmp)
+        plt.close(fig_tmp)
+
+        # Extract window around gap_min_index, port 0 (signal input L)
+        w_start = max(0, gap_min_index - window_half)
+        w_stop = min(n_freqs, gap_min_index + window_half)
+        i_out_start = window_half - (gap_min_index - w_start)
+        i_out_stop = i_out_start + (w_stop - w_start)
+        phot_cons_window[index, i_out_start:i_out_stop] = check[w_start:w_stop, 0]
 
     fig, ax = plt.subplots(figsize=(8, 5))
     log.debug(
@@ -232,6 +261,26 @@ def track_gap_center_over_pump_frequency():
     ax.grid(True, linestyle="--", alpha=0.5)
     ax.tick_params(labelsize=11)
     fig.tight_layout()
+
+    fig2, ax2 = plt.subplots(figsize=(8, 5))
+    im = ax2.pcolormesh(
+        pump_frequencies / 2 / np.pi,
+        freq_offset_axis,
+        phot_cons_window.T,
+        cmap="RdBu_r",
+        vmin=0,
+        vmax=2,
+        shading="auto",
+    )
+    fig2.colorbar(im, ax=ax2, label=r"$\sum_i\,(\omega_i/\omega_j)\,|S_{ij}|^2$  (port 0)")
+    ax2.axhline(0, color="k", linestyle="--", linewidth=1, label="gap center")
+    ax2.set_xlabel("Pump Frequency (GHz)", fontsize=13)
+    ax2.set_ylabel("Frequency offset from gap center (GHz)", fontsize=13)
+    ax2.set_title("Photon conservation around gap center vs. pump frequency", fontsize=14)
+    ax2.legend(fontsize=10)
+    ax2.tick_params(labelsize=11)
+    fig2.tight_layout()
+
     plt.show()
 
     return
@@ -262,24 +311,37 @@ def continuous_vs_discrete():
     omegas = cfg.omegas
     omega_I = omegas + cfg.omega_pump
 
+    # Bloch wavenumbers for quasi-photon conservation: weight = kI/kS for idler ports
+    oc, oj = cfg.omega_cutoff, cfg.omega_j
+    dispersion_fn = dispersion_bloch
+    kS = dispersion_fn(omegas, oc, oj)
+    valid_I = omega_I < oc
+    kI = np.where(valid_I, dispersion_fn(
+        np.where(valid_I, omega_I, oc * 0.9999), oc, oj), np.nan)
+    w_idler = kI / kS  # quasi-photon (k) weight for idler ports
+
+
     # --- discrete ---
     sim = Simulation(JTLDiscrete, cfg)
     S = sim.get_s_matrix().array  # (Nf, 4, 4), 0-indexed
-    S31_disc = (
-        np.abs(S[:, 2, 0]) ** 2
-    )  # signal transmission (right out, signal in left)
-    S21_disc = (
-        np.abs(S[:, 1, 0]) ** 2
-    )  # backward idler (idler-left out, signal-left in)
+    print(np.abs(S))
+    S31_disc = np.abs(S[:, 2, 0]) ** 2
+    S21_disc = np.abs(S[:, 1, 0]) ** 2
     S11_disc = np.abs(S[:, 0, 0]) ** 2
     S41_disc = np.abs(S[:, 3, 0]) ** 2
 
-    # Energy check: (ωI/ωs)·|S21| + |S31| should ≈ 1 with pump
+    vg_s = (cfg.omega_cutoff / 2) * np.sqrt(1 - (omegas / cfg.omega_cutoff)**2)
+    vg_i = (cfg.omega_cutoff / 2) * np.sqrt(1 - (omega_I / cfg.omega_cutoff)**2)
+    Zs = 50/ np.sqrt(1 - (omegas/cfg.omega_cutoff)**2)
+    Zi = 50/ np.sqrt(1 - (omega_I/cfg.omega_cutoff)**2)
+
+    factor = 1.0
+    
     energy_disc = (
-        (omegas / omega_I) * S21_disc
+        factor * S21_disc
         + S31_disc
         + S11_disc
-        + (omegas / omega_I) * S41_disc
+        + factor * S41_disc
     )
 
     # --- continuous ---
@@ -287,7 +349,7 @@ def continuous_vs_discrete():
     S_cont = sim_cont.get_s_matrix().array
     S31_cont = np.abs(S_cont[:, 2, 0]) ** 2
     S21_cont = np.abs(S_cont[:, 1, 0]) ** 2
-
+    
     delta_k = sim_cont.phase_mismatch(omegas)
     gap_freq = sim_cont.gap_center()
 
@@ -296,7 +358,7 @@ def continuous_vs_discrete():
         gap_freq / (2 * np.pi) if gap_freq is not None else float("nan"),
     )
 
-    energy_cont = (omegas / omega_I) * S21_cont + S31_cont  # S21 = 0 in cont. model
+    energy_cont = factor * S21_cont + S31_cont
 
     # --- 2×2 comparison plot ---
     fig, axes = plt.subplots(2, 2, figsize=(13, 8), sharex=True)
@@ -341,17 +403,17 @@ def continuous_vs_discrete():
     )
     _vline(ax_s21)
     ax_s21.set_ylabel("|S21| (dB)")
-    ax_s21.set_title("Backward idler S21  (main stop-band channel)")
+    ax_s21.set_title("Backward idler S21")
     ax_s21.legend(fontsize=9)
     ax_s21.grid(True, alpha=0.3)
 
     # Phase mismatch
-    ax_dk.plot(freqs_ghz, delta_k, lw=1.5, label="Δk = ks + kI - kp")
+    ax_dk.plot(freqs_ghz, delta_k, lw=1.5)
     ax_dk.axhline(0, color="k", lw=0.8, ls="--")
     _vline(ax_dk)
     ax_dk.set_xlabel("Frequency (GHz)")
     ax_dk.set_ylabel("Δk (rad/cell)")
-    ax_dk.set_title("Phase mismatch  (backward-wave: ks + kI = kp at gap)")
+    ax_dk.set_title("Phase mismatch = ks + kp - ki")
     ax_dk.legend(fontsize=9)
     ax_dk.grid(True, alpha=0.3)
 
@@ -478,6 +540,3 @@ if __name__ == "__main__":
 # superimpose with center bandwidth
 # photon number conservation, start with pump near zero, no modulation etc
 # normalize the transfer matrices for photon flux
-
-
-# Si |Sij| = 1

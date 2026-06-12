@@ -49,32 +49,32 @@ def check_manley_rowe_residual(
     omegas: np.ndarray,
     omega_pump: float,
     ks_state: list[int],
+    port_ks: np.ndarray | None = None,
 ) -> np.ndarray:
     """
-    Fractional Manley-Rowe residual per frequency per input port.
+    Fractional quasi-photon conservation residual per frequency per input port.
 
-    Photon conservation requires
-        Σᵢ |S[i,j]|² / ωᵢ  =  1 / ωⱼ
+    For a Bloch-mode S-matrix (ABCD→S with uniform Z0), the conserved quantity
+    is quasi-photon number weighted by wavenumber:
+        Σᵢ (kᵢ/kⱼ) |S[i,j]|²  =  1
 
-    so the returned quantity  (lhs - rhs) / rhs  should be ≈ 0.
-
-    Parameters
-    ----------
-    S : (Nf, N, N) — complex S-matrix, S[f, output, input]
-    omegas : (Nf,) — signal angular frequencies [rad/s]
-    omega_pump : pump angular frequency [rad/s]
-    ks_state : sideband indices, e.g. [0, 1]
+    Pass port_ks (shape (Nf, N)) to use k-weights.
+    Without port_ks, falls back to frequency weights: Σᵢ |S[i,j]|²/ωᵢ = 1/ωⱼ.
 
     Returns
     -------
     residual : (Nf, N) — fractional error; 0 = exact conservation
     """
-    w = _get_port_frequencies(omegas, omega_pump, ks_state)  # (Nf, N)
     Sabsq = np.abs(S) ** 2  # (Nf, N, N)
-
-    # Sum |S[i,j]|² / ω_i over output ports i (axis -2 = rows)
-    weighted_col_sum = (Sabsq / w[:, :, None]).sum(axis=-2)  # (Nf, N)
-    reference = 1.0 / w  # (Nf, N)
+    if port_ks is not None:
+        k = port_ks  # (Nf, N)
+        # Σᵢ (kᵢ/kⱼ)|S[i,j]|² — axis -2 sums over output ports i
+        weighted_col_sum = (Sabsq * k[:, :, None]).sum(axis=-2) / k  # (Nf, N)
+        reference = np.ones_like(k)
+    else:
+        w = _get_port_frequencies(omegas, omega_pump, ks_state)  # (Nf, N)
+        weighted_col_sum = (Sabsq / w[:, :, None]).sum(axis=-2)  # (Nf, N)
+        reference = 1.0 / w  # (Nf, N)
     return (weighted_col_sum - reference) / reference
 
 
@@ -97,36 +97,48 @@ def check_photon_conservation(
     omegas: np.ndarray,
     omega_pump: float,
     ks_state: list[int],
+    port_ks: np.ndarray | None = None,
     ax: plt.Axes | None = None,
 ) -> np.ndarray:
     """
-    Generalized Manley-Rowe photon conservation check.
+    Quasi-photon conservation check for a Bloch-mode S-matrix.
 
-    Computes  Σᵢ (ωⱼ/ωᵢ) |S[i,j]|²  for every input port j.
-    A lossless system returns 1 for all ports and frequencies.
+    For a ABCD→S matrix normalised to uniform Z0, the conserved quantity is
+    quasi-photon number (kᵢ/kⱼ weighting), not energy-photon number (ωⱼ/ωᵢ):
+
+        Σᵢ (kᵢ/kⱼ) |S[i,j]|²  =  1
+
+    Pass port_ks (shape (Nf, N)) — Bloch wavenumber per port — to use the
+    correct k-weights.  Without port_ks, falls back to ωⱼ/ωᵢ weighting.
 
     Parameters
     ----------
     S        : (Nf, N, N) — complex S-matrix, S[f, output, input]
-    omegas   : (Nf,) — signal angular frequencies [rad/s]
-    omega_pump : pump angular frequency [rad/s]
+    omegas   : (Nf,) — signal angular frequencies
+    omega_pump : pump angular frequency
     ks_state : sideband indices, e.g. [0, 1]
+    port_ks  : (Nf, N) — Bloch wavenumber per port; k-weights used when given
     ax       : optional Axes; a new figure is created if None
 
     Returns
     -------
-    check : (Nf, N)
+    check : (Nf, N)  — should be 1 everywhere for a lossless system
     """
-    w = _get_port_frequencies(omegas, omega_pump, ks_state)  # (Nf, N)
     Sabsq = np.abs(S) ** 2  # (Nf, N, N);  S[f, output_i, input_j]
 
-    # Broadcast port frequencies into the (Nf, output_i, input_j) shape
-    omega_j = w[:, np.newaxis, :]  # (Nf,  1,  N) — freq of input port j
-    omega_i = w[:, :, np.newaxis]  # (Nf,  N,  1) — freq of output port i
+    if port_ks is not None:
+        w_j = port_ks[:, np.newaxis, :]  # (Nf, 1, N) — k of input port j
+        w_i = port_ks[:, :, np.newaxis]  # (Nf, N, 1) — k of output port i
+        ylabel = r"$\sum_i (k_i/k_j)\,|S_{ij}|^2$"
+    else:
+        w = _get_port_frequencies(omegas, omega_pump, ks_state)  # (Nf, N)
+        w_j = w[:, np.newaxis, :]
+        w_i = w[:, :, np.newaxis]
+        ylabel = r"$\sum_i (\omega_j/\omega_i)\,|S_{ij}|^2$"
 
-    # check[f, j] = Σᵢ (ω_j / ω_i) |S[f, i, j]|²  —  should equal 1 when lossless
-    check = (Sabsq * (omega_j / omega_i)).sum(axis=1)  # sum over output ports → (Nf, N)
-    # check = Sabsq[:, 0, 0] + omegas/(omegas+omega_pump) * Sabsq[:, 1, 0]+Sabsq[:, 2, 0] + omegas/(omegas+omega_pump) * Sabsq[:, 3, 0]
+    # check[f, j] = Σᵢ (w_i/w_j) |S[f, i, j]|²  — sum over output ports i
+    check = (Sabsq * (w_i / w_j)).sum(axis=1)  # (Nf, N)
+
     if ax is None:
         _, ax = plt.subplots()
 
@@ -138,8 +150,8 @@ def check_photon_conservation(
         ax.plot(freqs_ghz, check[:, j], label=f"port {j + 1} (k={k}, {side})")
     ax.axhline(1.0, color="k", linestyle="--", linewidth=0.8)
     ax.set_xlabel("Frequency (GHz)")
-    ax.set_ylabel(r"$\sum_i (\omega_j/\omega_i)\,|S_{ij}|^2$")
-    ax.set_title("Photon conservation (Manley-Rowe)")
+    ax.set_ylabel(ylabel)
+    ax.set_title("Quasi-photon conservation")
     ax.legend()
 
     return check
@@ -177,7 +189,7 @@ def check_energy_conservation(
 
     For a passive lossless system this equals 1.
     The deviation from 1 is the net pump energy drawn:
-        ΔE_pump(j) = (check(j) − 1) · ωⱼ
+        ΔE_pump(j) = (check(j) - 1) · ωⱼ
 
     Positive deviation: pump provides energy (gain region).
     Negative deviation: pump absorbs energy (deamplification / gap).
