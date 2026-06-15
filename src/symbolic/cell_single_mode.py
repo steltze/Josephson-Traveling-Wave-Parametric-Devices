@@ -65,11 +65,13 @@ class CellSingleMode:
 
     def _build_Yg_shunt(self, Yg_m: list[type[Function]]) -> Expr:
         """Return the symbolic Yg(t) Fourier series up to order M."""
-        admittance = self.Yg0(self.xi)
+        admittance = self.Yg0(self.omega[self.k])
         for mi, Ym in enumerate(Yg_m, start=1):
-            admittance += Ym(self.xi) * self._fourier_basis(mi) * exp(
+            admittance += Ym(self.omega[self.k - mi]) * self._fourier_basis(mi) * exp(
                 I * mi * self.theta
-            ) + Ym(self.xi) * self._fourier_basis(-mi) * exp(-I * mi * self.theta)
+            ) + Ym(self.omega[self.k + mi]) * self._fourier_basis(-mi) * exp(
+                -I * mi * self.theta
+            )
         return admittance
 
     def _extract_harmonic_results(
@@ -100,8 +102,16 @@ class CellSingleMode:
         for m in ms_nonzero:
             cv_raw = Vn_1_expanded.coeff(self._fourier_basis(m))
             ci_raw = In_1_expanded.coeff(self._fourier_basis(m))
-            cv = cv_raw.subs(self.xi, self.omega[self.k]).subs(self.k, self.k - m)
-            ci = ci_raw.subs(self.xi, self.omega[self.k]).subs(self.k, self.k - m)
+            cv = (
+                cv_raw.subs(self.xi, self.omega[self.k - m])
+                .subs(self.V[self.k, self.n], self.V[self.k - m, self.n])
+                .subs(self.Ic[self.k, self.n], self.Ic[self.k - m, self.n])
+            )
+            ci = (
+                ci_raw.subs(self.xi, self.omega[self.k - m])
+                .subs(self.V[self.k, self.n], self.V[self.k - m, self.n])
+                .subs(self.Ic[self.k, self.n], self.Ic[self.k - m, self.n])
+            )
             results[m] = (cv, ci)
 
         # DC component: subtract all oscillating parts
@@ -158,17 +168,6 @@ class CellSingleMode:
             for col_idx, s in enumerate(state_syms):
                 T_sym[row_idx, col_idx] = cv_p.coeff(s)
                 T_sym[n_modes + row_idx, col_idx] = ci_p.coeff(s)
-
-        # The harmonic substitution subs(xi, omega[k]).subs(k, k-m) causes the
-        # Yg0 frequency in the D block to be evaluated at the *source* sideband
-        # frequency instead of the *row* frequency, making det(T) != 1. Fix:
-        # recompute D = I + C*B from the already-correct A, B, C blocks so that
-        # det(T) = det(D - C*B) = det(I) = 1 exactly.
-        from sympy import eye as _eye
-
-        B_sym = T_sym[:n_modes, n_modes:]
-        C_sym = T_sym[n_modes:, :n_modes]
-        T_sym[n_modes:, n_modes:] = _eye(n_modes) + C_sym * B_sym
 
         return T_sym, state_syms
 
