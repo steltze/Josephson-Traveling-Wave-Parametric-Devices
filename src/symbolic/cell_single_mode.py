@@ -169,6 +169,18 @@ class CellSingleMode:
                 T_sym[row_idx, col_idx] = cv_p.coeff(s)
                 T_sym[n_modes + row_idx, col_idx] = ci_p.coeff(s)
 
+        ks_set = set(ks_state)
+        out_of_range = {
+            atom: 0
+            for atom in T_sym.atoms(AppliedUndef)
+            if len(atom.args) == 1
+            and isinstance(atom.args[0], Indexed)
+            and atom.args[0].indices[0].is_Integer
+            and int(atom.args[0].indices[0]) not in ks_set
+        }
+        if out_of_range:
+            T_sym = T_sym.xreplace(out_of_range)
+
         return T_sym, state_syms
 
     def build_symbolic_transfer_matrix(
