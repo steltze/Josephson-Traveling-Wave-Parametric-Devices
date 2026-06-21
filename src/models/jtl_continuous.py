@@ -18,6 +18,7 @@ _log = get_logger(__name__)
 # Dispersion relations — uniform signature (omegas, omega_cutoff, omega_j)
 # ---------------------------------------------------------------------------
 
+
 def dispersion_linear(
     omegas: np.ndarray, omega_cutoff: float, omega_j: float = np.inf
 ) -> np.ndarray:
@@ -55,6 +56,7 @@ def dispersion_bloch_with_plasma(
 # ---------------------------------------------------------------------------
 # JTLContinuous class
 # ---------------------------------------------------------------------------
+
 
 class JTLContinuous:
     """
@@ -98,8 +100,10 @@ class JTLContinuous:
     @classmethod
     def with_dispersion(cls, fn) -> type:
         """Return a subclass that uses *fn* as its dispersion relation."""
+
         class _Variant(cls):
             dispersion_fn = staticmethod(fn)
+
         _Variant.__name__ = f"JTLContinuous[{fn.__name__}]"
         return _Variant
 
@@ -140,9 +144,7 @@ class JTLContinuous:
             if ws <= 0.0:
                 return float("nan")
             return float(
-                self._k(np.float64(ws))
-                + self._k(np.float64(ws + cfg.omega_pump))
-                - kp
+                self._k(np.float64(ws)) + self._k(np.float64(ws + cfg.omega_pump)) - kp
             )
 
         lo = cfg.omega_cutoff * 1e-4
@@ -167,7 +169,7 @@ class JTLContinuous:
         kS0 = float(self._k(np.float64(omega_gap)))
         kI0 = float(self._k(np.float64(omega_I_gap)))
 
-        m0 = 2.0 * cfg.epsilon / (1.0 - omega_gap ** 2 / cfg.omega_j ** 2)
+        m0 = 2.0 * cfg.epsilon / (1.0 - omega_gap**2 / cfg.omega_j**2)
         gamma = m0 / 4.0 * np.sqrt(kS0 * kI0)
 
         delta_omega = 4.0 * gamma / (self._dk(omega_gap) + self._dk(omega_I_gap))
@@ -193,37 +195,40 @@ class JTLContinuous:
         kS = self._k(omegas)
         kI = self._k(omega_I_c)
         kp = cfg.omega_pump * cfg.cell_size / cfg.v_pump
-        kappa = kS + kI - kp # ks + kp = ki but kp, ki < 0 so we do -kp, -(-ki)
+        kappa = kS + kI - kp  # ks + kp = ki but kp, ki < 0 so we do -kp, -(-ki)
 
-        m_eff = 2.0 * cfg.epsilon / (1.0 - omegas ** 2 / cfg.omega_j ** 2)
+        m_eff = 2.1 * cfg.epsilon / (1.0 - omegas**2 / cfg.omega_j**2)
         # m_eff = 2.0 * cfg.epsilon
 
-        q = -m_eff / 4.0 * np.emath.sqrt((kS) * (kI)) # no corrections added, (kS - kappa) * (kI + kappa)
+        q = (
+            -m_eff / 4.0 * np.emath.sqrt((kS) * (kI))
+        )  # no corrections added, (kS - kappa) * (kI + kappa)
 
         N = cfg.ncell
-        Delta = q ** 2 - (kappa / 2.0) ** 2
+        Delta = q**2 - (kappa / 2.0) ** 2
         Delta_sqrt = np.emath.sqrt(Delta)
 
         S31 = np.where(
             valid,
-            np.exp(-0.5j*kappa*N) / (
+            np.exp(-0.5j * kappa * N)
+            / (
                 np.cosh(Delta_sqrt * N)
                 + 0.5j * kappa / Delta_sqrt * np.sinh(Delta_sqrt * N)
             ),
             np.nan + 0j,
         )
 
-        gS = m_eff / 4.0 * kS # no correction added, kI / (kI + kappa)
+        gS = m_eff / 4.0 * kS  # no correction added, kI / (kI + kappa)
         S21 = np.where(
             valid,
-            np.exp(0.5j*kappa*N) * gS / Delta_sqrt * np.sinh(Delta_sqrt * N) * S31,
+            np.exp(0.5j * kappa * N) * gS / Delta_sqrt * np.sinh(Delta_sqrt * N) * S31,
             np.nan + 0j,
         )
 
         Nf = len(omegas)
         data = np.zeros((Nf, 4, 4), dtype=complex)
         data[:, 2, 0] = S31
-        data[:, 1, 0] = S21 * np.sqrt(kI/kS)
+        data[:, 1, 0] = S21 * np.sqrt(kI / kS)
         return SMatrix(data, cfg.Z0)
 
     # ------------------------------------------------------------------

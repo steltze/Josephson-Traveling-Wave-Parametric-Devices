@@ -89,16 +89,10 @@ class Simulation:
                 # sqrt_w = np.sqrt(port_omegas)  # (Nf, N)
                 # S_cells = S_cells * (sqrt_w[:, None, None, :] / sqrt_w[:, None, :, None])
 
-
                 S_total = S_cells[:, 0]
                 for c in range(1, Nc):
                     S_total = redheffer_star(S_cells[:, c], S_total)
                 self._S_matrix = SMatrix(S_total, self._cfg.Z0)
-
-                # self._S_matrix.array[:, 1, 0] /= np.sqrt((self._cfg.omegas/(self._cfg.omegas + self._cfg.omega_pump)))
-                # self._S_matrix.array[:, 3, 0] /= np.sqrt((self._cfg.omegas/(self._cfg.omegas + self._cfg.omega_pump)))
-
-                # self._S_matrix.array[:, 2, 3] *= np.sqrt((self._cfg.omegas/(self._cfg.omegas + self._cfg.omega_pump)))
 
         return self._S_matrix
 
@@ -106,6 +100,7 @@ class Simulation:
         self,
         cell_idx: int | None = None,
         ax: plt.Axes | None = None,
+        sideband: int | None = None,
     ) -> plt.Axes:
         """
         Plot Bloch wavenumbers vs frequency for a representative unit cell.
@@ -115,17 +110,33 @@ class Simulation:
         cell_idx : int or None
             Which cell to use for the dispersion (default: middle cell).
         ax : matplotlib Axes or None
+        sideband : int or None
+            If given, a value from ``ks_state`` (e.g. 0 for the signal):
+            only Bloch modes dominated by that sideband's voltage component
+            are plotted. Default (None) plots every mode.
         """
         T_grid = self._get_T_grid()  # (Nf, Nc, dim, dim)
         idx = cell_idx if cell_idx is not None else self._cfg.ncell // 2
         T_single = T_grid[:, idx]  # (Nf, dim, dim)
-        alpha, k = bloch_wavenumbers(T_single)
 
         if ax is None:
             _, ax = plt.subplots(figsize=(7, 4))
 
-        for mode_i in range(k.shape[1]):
-            ax.plot(k[:, mode_i], self._cfg.freqs, ".", label=f"mode {mode_i}")
+        if sideband is not None:
+            alpha, k, eigenvectors = bloch_wavenumbers(T_single, return_eigenvectors=True)
+            n_modes = len(self._cfg.ks_state)
+            sb_idx = self._cfg.ks_state.index(sideband)
+            # rows 0:n_modes of each eigenvector are the V(k) components,
+            # in ks_state order — the largest one identifies the dominant sideband.
+            v_weight = np.abs(eigenvectors[:, :n_modes, :])  # (Nf, n_modes, N)
+            dominant = np.argmax(v_weight, axis=1)  # (Nf, N)
+            mask = dominant == sb_idx
+            freqs_grid = np.broadcast_to(self._cfg.freqs[:, None], k.shape)
+            ax.plot(k[mask], freqs_grid[mask], ".", label=f"k={sideband}")
+        else:
+            alpha, k = bloch_wavenumbers(T_single)
+            for mode_i in range(k.shape[1]):
+                ax.plot(k[:, mode_i], self._cfg.freqs, ".", label=f"mode {mode_i}")
 
         ax.set_xlabel("k (rad/cell)")
         ax.set_ylabel("Frequency (GHz)")
