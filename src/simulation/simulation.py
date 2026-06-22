@@ -163,7 +163,8 @@ class Simulation:
         ax : matplotlib Axes or None
         """
         S = self.get_s_matrix()
-        return _plot_s_params(S.array, self._cfg.freqs, params, ax=ax, **kwargs)
+        k = kwargs.pop("k", 0.0)
+        return _plot_s_params(S.array, self._cfg.freqs+k*self._cfg.omega_pump/2.0/np.pi, params, ax=ax, **kwargs)
 
     def _get_T_grid(self) -> np.ndarray:
         """Evaluate T_sym on the full (Nf, Nc) grid; cached after first call."""
