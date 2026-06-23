@@ -319,7 +319,7 @@ class CellSingleMode:
                 self.omega_p: w_p,
             }
             for k in k_range:
-                omega_k = w_s + k * w_p
+                omega_k = np.abs(w_s + k * w_p)
                 subs[self.omega[k]] = omega_k
                 subs[self.Zs0(self.omega[k])] = cell.Zs0_fn(omega_k)
                 subs[self.Yg0(self.omega[k])] = cell.Yg0_fn(omega_k)
@@ -337,6 +337,46 @@ class CellSingleMode:
 
         return T_grid
 
+    def _export_matrix_latex(
+        self,
+        T_sym: Matrix,
+        state_syms: list[Expr] | None,
+        out: Path,
+        title: str,
+    ) -> Path:
+        """Write T_sym as a bordered-matrix LaTeX snippet (row/col labels included)."""
+        from sympy import latex as sym_latex
+
+        dim = T_sym.shape[0]
+        labels = (
+            [sym_latex(s) for s in state_syms]
+            if state_syms
+            else [f"V_{{{j},n}}" for j in range(dim // 2)]
+            + [f"I_{{{j},n}}" for j in range(dim // 2)]
+        )
+
+        header = " & ".join(labels)
+        rows = [
+            f"{labels[i]} & " + " & ".join(sym_latex(T_sym[i, j]) for j in range(dim))
+            for i in range(dim)
+        ]
+        body = " \\\\\n".join(rows)
+
+        tex = (
+            f"% {title}\n"
+            "\\begin{equation}\n"
+            "\\begin{array}{c|" + "c" * dim + "}\n"
+            f" & {header} \\\\\n"
+            "\\hline\n"
+            f"{body} \\\\\n"
+            "\\end{array}\n"
+            "\\end{equation}\n"
+        )
+
+        out.write_text(tex)
+        print(f"Matrix LaTeX saved to {out}")
+        return out
+
     def export_matrix_graphic(
         self,
         T_sym: Matrix,
@@ -346,20 +386,24 @@ class CellSingleMode:
         fontsize: int = 9,
     ) -> Path:
         """
-        Render T_sym as a PDF figure.
+        Render T_sym as a PDF figure, or as LaTeX source if filename ends in .tex.
 
         Parameters
         ----------
         T_sym       : sympy Matrix
         state_syms  : list of state symbols used as row/column labels (optional)
-        filename    : output path — .pdf, .png, or .svg
-        title       : figure title
-        fontsize    : base font size for cell content (pt)
+        filename    : output path — .pdf, .png, .svg, or .tex
+        title       : figure title (or LaTeX comment, for .tex output)
+        fontsize    : base font size for cell content (pt); ignored for .tex output
 
         Returns
         -------
-        pathlib.Path of the saved figure
+        pathlib.Path of the saved figure or LaTeX file
         """
+        out = Path(filename)
+        if out.suffix.lower() == ".tex":
+            return self._export_matrix_latex(T_sym, state_syms, out, title)
+
         import re
         import matplotlib
 
@@ -485,7 +529,6 @@ class CellSingleMode:
             fontweight="bold",
         )
 
-        out = Path(filename)
         fig.savefig(out, bbox_inches="tight", dpi=150)
         plt.close(fig)
         print(f"Matrix plot saved to {out}")

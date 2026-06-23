@@ -69,11 +69,20 @@ class Simulation:
                 )
         return self._T_sym, self._state_syms
 
-    def get_s_matrix(self) -> SMatrix:
+    def get_s_matrix(self, normalize: bool = False) -> SMatrix:
         """
         Return the cascaded S-matrix.
 
         Shape: (Nf, dim, dim)
+
+        Parameters
+        ----------
+        normalize : bool
+            If True, re-normalize to the quasi-photon-flux basis via
+            ``S_ph = D⁻¹ @ S @ D``, including the kinetic-inductance
+            (plasma) correction to each port's local characteristic
+            impedance: weight w_k = (1 - ω_k²/ω_j²)² / ω_k, for port
+            frequency ω_k and junction plasma frequency ω_j.
         """
         if self._S_matrix is None:
             with _timer("S-matrix cascade"):
@@ -82,19 +91,22 @@ class Simulation:
                 # Convert each per-cell T-matrix to S, then cascade via Redheffer star
                 S_cells = ABCD_to_S(np.linalg.inv(T_grid.reshape(Nf * Nc, N, N)), self._cfg.Z0).reshape(Nf, Nc, N, N)
 
-                # D @ P @ D^{-1}, D = diag(1/sqrt(omega)), same D for all cells at a given frequency
-                # ks = np.asarray(self._cfg.ks_state)
-                # port_omegas_half = self._cfg.omegas[:, None] + ks[None, :] * self._cfg.omega_pump  # (Nf, N//2)
-                # port_omegas = np.concatenate([port_omegas_half, port_omegas_half], axis=1)  # (Nf, N)
-                # sqrt_w = np.sqrt(port_omegas)  # (Nf, N)
-                # S_cells = S_cells * (sqrt_w[:, None, None, :] / sqrt_w[:, None, :, None])
-
                 S_total = S_cells[:, 0]
                 for c in range(1, Nc):
                     S_total = redheffer_star(S_cells[:, c], S_total)
                 self._S_matrix = SMatrix(S_total, self._cfg.Z0)
 
-        return self._S_matrix
+        if not normalize:
+            return self._S_matrix
+
+        # D = diag(sqrt(w_k)), w_k = (1 - omega_k^2 / omega_j^2)^2 / omega_k
+        ks = np.asarray(self._cfg.ks_state)
+        port_omegas_half = self._cfg.omegas[:, None] + ks[None, :] * self._cfg.omega_pump  # (Nf, N//2)
+        port_omegas = np.concatenate([port_omegas_half, port_omegas_half], axis=1)  # (Nf, N)
+        weights = 1/((1 - port_omegas**2 / self._cfg.omega_j**2) ** 2) * port_omegas
+        sqrt_w = np.sqrt(weights)  # (Nf, N)
+        S_ph = self._S_matrix.array * (sqrt_w[:, :, None] / sqrt_w[:, None, :])
+        return SMatrix(S_ph, self._cfg.Z0)
 
     def plot_dispersion_relation(
         self,
