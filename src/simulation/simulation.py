@@ -96,17 +96,16 @@ class Simulation:
                     S_total = redheffer_star(S_cells[:, c], S_total)
                 self._S_matrix = SMatrix(S_total, self._cfg.Z0)
 
-        if not normalize:
-            return self._S_matrix
+            if normalize:
+                # D = diag(sqrt(w_k)), w_k = (1 - omega_k^2 / omega_j^2)^2 / omega_k
+                ks = np.asarray(self._cfg.ks_state)
+                port_omegas_half = np.abs(self._cfg.omegas[:, None] + ks[None, :] * self._cfg.omega_pump)  # (Nf, N//2)
+                port_omegas = np.concatenate([port_omegas_half, port_omegas_half], axis=1)  # (Nf, N)
+                weights = 1/np.sqrt(port_omegas)*(1 - port_omegas**2 / self._cfg.omega_j**2)
+                S_ph = self._S_matrix.array * (weights[:, None, :] / weights[:, :, None])
+                self._S_matrix = SMatrix(S_ph, self._cfg.Z0)
 
-        # D = diag(sqrt(w_k)), w_k = (1 - omega_k^2 / omega_j^2)^2 / omega_k
-        ks = np.asarray(self._cfg.ks_state)
-        port_omegas_half = self._cfg.omegas[:, None] + ks[None, :] * self._cfg.omega_pump  # (Nf, N//2)
-        port_omegas = np.concatenate([port_omegas_half, port_omegas_half], axis=1)  # (Nf, N)
-        weights = 1/((1 - port_omegas**2 / self._cfg.omega_j**2) ** 2) * port_omegas
-        sqrt_w = np.sqrt(weights)  # (Nf, N)
-        S_ph = self._S_matrix.array * (sqrt_w[:, :, None] / sqrt_w[:, None, :])
-        return SMatrix(S_ph, self._cfg.Z0)
+        return self._S_matrix 
 
     def plot_dispersion_relation(
         self,
@@ -174,8 +173,10 @@ class Simulation:
         params : list of (i, j) 1-based index pairs, e.g. [(3,1), (1,1)]
         ax : matplotlib Axes or None
         """
-        S = self.get_s_matrix()
+        normalize = kwargs.pop("normalize", False)
         k = kwargs.pop("k", 0.0)
+
+        S = self.get_s_matrix(normalize=normalize)
         return _plot_s_params(S.array, self._cfg.freqs+k*self._cfg.omega_pump/2.0/np.pi, params, ax=ax, **kwargs)
 
     def _get_T_grid(self) -> np.ndarray:
