@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 
 from models.cell import CellImmitance
+from models.helpers import band_coupling
 
 
 class JTLDiscrete:
@@ -92,6 +93,10 @@ class JTLDiscrete:
         v_p = config.v_pump
         thetas = w_p / v_p * ns * a
 
+        M = config.M
+        w_s = np.asarray(config.omegas)   # (Nf,)
+        Nf = len(w_s)
+
         lh = cls.handedness == "left"
         cells = []
         for i in range(ncell):
@@ -101,6 +106,33 @@ class JTLDiscrete:
                 C_end = C[i] / (2.0 if (i == 0 or i == ncell - 1) else 1.0)
                 _L, _wj, _eps, _th = L[i], wj[i], epsilons[i], thetas[i]
                 _C = C_end
+
+                n = len(config.ks_state)
+                Zs_harm_arr = np.zeros((Nf, n, n), dtype=complex)
+                if not first:
+                    # Build modulated L matrix in sideband space: I + eps*B1 + eps^2*B2 + ...
+                    L_mat = np.eye(n)
+                    for p in range(1, M + 1):
+                        L_mat += (_eps ** p) * band_coupling(n, p)
+                    # Sideband frequencies for each signal freq: (Nf, n)
+                    omega_sb = np.abs(w_s[:, None] + np.array(config.ks_state)[None, :] * w_p)
+                    # (Nf, n, n) diagonal Omega matrices
+                    Omega = np.zeros((Nf, n, n), dtype=float)
+                    for _k in range(n):
+                        Omega[:, _k, _k] = omega_sb[:, _k]
+                    # Exact parallel-LC series impedance: JJ inductor || self-capacitance
+                    Ccap_val = 1.0 / (_wj**2 * _L)
+                    Yex = np.linalg.inv(1j * (Omega @ (_L * L_mat))) + 1j * Omega * Ccap_val
+                    Zex = np.linalg.inv(Yex)  # (Nf, n, n)
+                    # Subtract zero-order diagonal: Zs0[f,k] = j*omega_sb*L/(1-omega_sb^2/wj^2)
+                    Zex_harm = Zex.copy()
+                    Zex_harm[:, np.arange(n), np.arange(n)] -= (
+                        1j * omega_sb * _L / (1.0 - omega_sb**2 / _wj**2)
+                    )
+                    # Full coupling matrix: Zs_harm_arr[f, target, source]
+                    Zs_harm_arr = Zex_harm
+                Yg_harm_arr = np.zeros((M, Nf), dtype=complex)
+
                 cells.append(
                     CellImmitance(
                         theta=_th,
@@ -108,18 +140,20 @@ class JTLDiscrete:
                             0.0 if f else 1j * w * L / (1 - w**2 / wji**2)
                         ),
                         Yg0_fn=lambda w, C=_C: 1j * w * C,
-                        Zs_harm_fn=lambda m, w, L=_L, wji=_wj, eps=_eps, f=first: (
-                            1j * w * L * (eps**m) / ((1 - w**2 / wji**2) ** (m + 1))
-                            if (not f)
-                            else 0.0
-                        ),
-                        Yg_harm_fn=lambda m, w: 0.0,
+                        Zs_harm_fn=Zs_harm_arr,
+                        Yg_harm_fn=Yg_harm_arr,
                     )
                 )
             else:
                 L_end = L[i] / (2.0 if (i == 0 or i == ncell - 1) else 1.0)
                 _C, _wj, _eps, _th = C[i], wj[i], epsilons[i], thetas[i]
                 _L = L_end
+
+                Zs_harm_arr = np.zeros((M, Nf), dtype=complex)
+                Yg_harm_arr = np.zeros((M, Nf), dtype=complex)
+                if M >= 1:
+                    Yg_harm_arr[0] = 1j * _eps / (2 * w_s * _L)
+
                 cells.append(
                     CellImmitance(
                         theta=_th,
@@ -127,10 +161,8 @@ class JTLDiscrete:
                         Yg0_fn=lambda w, L=_L, wji=_wj: (
                             (1 - w**2 / wji**2) / (1j * w * L)
                         ),
-                        Zs_harm_fn=lambda m, w: 0j,
-                        Yg_harm_fn=lambda m, w, L=_L, eps=_eps: (
-                            1j * eps / (2 * w * L) if m == 1 else 0.0
-                        ),
+                        Zs_harm_fn=Zs_harm_arr,
+                        Yg_harm_fn=Yg_harm_arr,
                     )
                 )
         return cells

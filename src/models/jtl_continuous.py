@@ -197,8 +197,7 @@ class JTLContinuous:
         kp = cfg.omega_pump * cfg.cell_size / cfg.v_pump
         kappa = kS + kI - kp  # ks + kp = ki but kp, ki < 0 so we do -kp, -(-ki)
 
-        m_eff = 2.1 * cfg.epsilon / (1.0 - omegas**2 / cfg.omega_j**2)
-        # m_eff = 2.0 * cfg.epsilon
+        m_eff = 2.0 * cfg.epsilon
 
         q = (
             -m_eff / 4.0 * np.emath.sqrt((kS) * (kI))
