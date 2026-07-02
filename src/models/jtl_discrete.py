@@ -115,7 +115,7 @@ class JTLDiscrete:
                     for p in range(1, M + 1):
                         L_mat += (_eps ** p) * band_coupling(n, p)
                     # Sideband frequencies for each signal freq: (Nf, n)
-                    omega_sb = np.abs(w_s[:, None] + np.array(config.ks_state)[None, :] * w_p)
+                    omega_sb = w_s[:, None] + np.array(config.ks_state)[None, :] * w_p
                     # (Nf, n, n) diagonal Omega matrices
                     Omega = np.zeros((Nf, n, n), dtype=float)
                     for _k in range(n):
@@ -126,9 +126,9 @@ class JTLDiscrete:
                     Zex = np.linalg.inv(Yex)  # (Nf, n, n)
                     # Subtract zero-order diagonal: Zs0[f,k] = j*omega_sb*L/(1-omega_sb^2/wj^2)
                     Zex_harm = Zex.copy()
-                    Zex_harm[:, np.arange(n), np.arange(n)] -= (
-                        1j * omega_sb * _L / (1.0 - omega_sb**2 / _wj**2)
-                    )
+                    # Zex_harm[:, np.arange(n), np.arange(n)] -= (
+                    #     1j * omega_sb * _L / (1.0 - omega_sb**2 / _wj**2)
+                    # )
                     # Full coupling matrix: Zs_harm_arr[f, target, source]
                     Zs_harm_arr = Zex_harm
                 Yg_harm_arr = np.zeros((M, Nf), dtype=complex)

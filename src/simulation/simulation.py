@@ -178,7 +178,7 @@ class Simulation:
             f"Dispersion relation  "
             f"(M={self._cfg.M}, ks={self._cfg.ks_state}, cell {idx})"
         )
-        ax.legend(fontsize=8)
+        ax.legend()
         ax.grid(True, alpha=0.25)
         return ax
 

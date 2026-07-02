@@ -65,8 +65,8 @@ def plot_s_parameters(
         ax_mag.plot(x, db, label=f"S{i}{j} | Mag")
         ax_phase.plot(x, angles, linestyle="--", label=f"S{i}{j} | Phase")
 
-    ax_mag.set_xlabel(freq_label)
     ax_mag.set_ylabel("Magnitude (dB)")
+    ax_phase.set_xlabel(freq_label)
     ax_phase.set_ylabel("Phase (rad)")
 
     if ylim is not None:

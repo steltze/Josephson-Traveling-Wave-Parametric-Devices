@@ -44,24 +44,17 @@ def redheffer_star(S2: np.ndarray, S1: np.ndarray) -> np.ndarray:
 
     return S
 
-
-def ABCD_to_S(ABCD: np.ndarray, Z0: float) -> np.ndarray:
+def ABCD_to_S(ABCD: np.ndarray, Z0) -> np.ndarray:
     """
     Convert ABCD transfer matrix to S-parameters.
 
-    Parameters
-    ----------
-    ABCD : ndarray, shape (N, N) or (Nf, N, N), N even
-    Z0   : reference impedance (ohms)
-
-    Returns
-    -------
-    ndarray, same shape as ABCD
+    Z0 : scalar (ohms) for uniform real reference, OR
+         array shape (N,) / (Nf, N) giving per-port reference impedance
+         (complex allowed). N is the number of ports = matrix dimension.
     """
     batched = ABCD.ndim == 3
     if not batched:
         ABCD = ABCD[None]
-
     Nf, N, _ = ABCD.shape
     k = N // 2
 
@@ -70,10 +63,9 @@ def ABCD_to_S(ABCD: np.ndarray, Z0: float) -> np.ndarray:
     C = ABCD[:, k:, :k]
     D = ABCD[:, k:, k:]
 
-    # Solve C @ [Cinv, CinvD] = [I, D] — avoids explicit inverse
     eye = np.broadcast_to(np.eye(k, dtype=complex), (Nf, k, k))
     Cinv_CinvD = np.linalg.solve(C, np.concatenate([eye, D], axis=-1))
-    Cinv = Cinv_CinvD[:, :, :k]
+    Cinv  = Cinv_CinvD[:, :, :k]
     CinvD = Cinv_CinvD[:, :, k:]
 
     Z = np.empty((Nf, N, N), dtype=complex)
@@ -82,14 +74,34 @@ def ABCD_to_S(ABCD: np.ndarray, Z0: float) -> np.ndarray:
     Z[:, k:, :k] = Cinv
     Z[:, k:, k:] = CinvD
 
-    # S = (Z - Z0·I) @ (Z + Z0·I)^{-1}
-    # Gref = (1/√Z0)·I cancels identically → dropped
-    # Right-solve: S·Zp = Zm  →  Zp^T·S^T = Zm^T
-    Z0I = Z0 * np.eye(N, dtype=complex)
-    S = np.linalg.solve(
-        (Z + Z0I).swapaxes(-1, -2),
-        (Z - Z0I).swapaxes(-1, -2),
-    ).swapaxes(-1, -2)
+    # --- per-port reference impedance ---
+    Z0 = np.asarray(Z0, dtype=complex)
+    if Z0.ndim == 0:                       # scalar -> broadcast to all ports
+        Z0vec = np.full((Nf, N), Z0)
+    elif Z0.ndim == 1:                     # (N,) -> same across frequency
+        Z0vec = np.broadcast_to(Z0, (Nf, N))
+    else:                                  # (Nf, N)
+        Z0vec = Z0
+
+    # diagonal matrices  diag(Z0)  and  diag(conj(Z0))
+    Z0d  = np.zeros((Nf, N, N), dtype=complex)
+    Z0cd = np.zeros((Nf, N, N), dtype=complex)
+    idx = np.arange(N)
+    Z0d[:, idx, idx]  = Z0vec
+    Z0cd[:, idx, idx] = np.conj(Z0vec)
+
+    # power-wave S = √G0 (Z - Z0*) (Z + Z0)^{-1} √G0^{-1}
+    G0 = np.real(Z0vec)
+    sqrtG0     = np.sqrt(G0)               # (Nf, N)
+    inv_sqrtG0 = 1.0 / sqrtG0
+
+    M = Z - Z0cd                           # numerator
+    P = Z + Z0d                            # denominator
+    # right-solve P^{-1}: S0 = M P^{-1}  ->  P^T S0^T = M^T
+    S0 = np.linalg.solve(P.swapaxes(-1, -2), M.swapaxes(-1, -2)).swapaxes(-1, -2)
+
+    # apply the diagonal √G0 (·) √G0^{-1} as row/column scaling
+    S = sqrtG0[:, :, None] * S0 * inv_sqrtG0[:, None, :]
 
     return S[0] if not batched else S
 

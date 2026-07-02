@@ -1,5 +1,20 @@
+import os
+
 import numpy as np
+import matplotlib as mpl
 import matplotlib.pyplot as plt
+
+mpl.rcParams.update({
+    "font.size": 12,
+    "axes.titlesize": 14,
+    "axes.labelsize": 13,
+    "xtick.labelsize": 12,
+    "ytick.labelsize": 12,
+    "legend.fontsize": 11,
+    "figure.titlesize": 14,
+    "savefig.dpi": 300,
+    "savefig.bbox": "tight",
+})
 
 from logger import get_logger, setup_logging
 
@@ -13,12 +28,23 @@ from models.jtl_continuous import (
     dispersion_linear_with_plasma,
 )
 from symbolic import CellSingleMode
+from analysis.dispersion_relation import bloch_wavenumbers
 from analysis.checks import (
-    check_photon_conservation,
-    check_energy_conservation,
-    check_pump_photon_balance,
+    check_photon_flux_conservation,
     check_transfer_matrix_determinant,
 )
+
+
+_FIG_DIR = os.path.join(os.path.dirname(__file__), "..", "figures")
+
+
+def _save_all(prefix: str, fmt: str = "pdf") -> None:
+    """Save every open figure to figures/<prefix>_<n>.<fmt>."""
+    os.makedirs(_FIG_DIR, exist_ok=True)
+    for n in plt.get_fignums():
+        path = os.path.join(_FIG_DIR, f"{prefix}_{n}.{fmt}")
+        plt.figure(n).savefig(path)
+        log.info("Saved %s", path)
 
 
 def main():
@@ -59,11 +85,12 @@ def main():
     sim.plot_s_parameters([(1, 1), (3, 1)])
     sim.plot_s_parameters([(2, 2), (4, 2)])
     sim.plot_dispersion_relation()
+    # _save_all("main")
     plt.show()
 
 
 def julia_comparison():
-    ks_state = [-2, -1, 0, 1, 2]
+    ks_state = [0, 1, 2, 3, 4]
     M = 1
     ncell = 320+1
     cfg = SimulationConfig(
@@ -75,7 +102,7 @@ def julia_comparison():
         omega_cutoff=2 * 50 / 540e-3,  # L = 530 pH, C = 212 fF -> ~30 GHz
         omega_pump=3.4 * 2 * np.pi,
         omega_j=60 * 2 * np.pi,  # usually smaller
-        epsilon=0.1,  # 10% inductance modulation (|Φ_RF| = 0.01 Φ_0)
+        epsilon=0.15,  # 10% inductance modulation (|Φ_RF| = 0.01 Φ_0)
         omega_c=3.4
         * 2
         * np.pi,  # gap: well in the S parameter from signal to tranmission
@@ -90,20 +117,12 @@ def julia_comparison():
     log.info("omega_pump = %.3f GHz", cfg.omega_pump / (2 * np.pi))
 
     sim = Simulation(JTLDiscrete, cfg)
-    sim.plot_s_parameters([(3, 8), (8, 3)], k=0, normalize=True)
-    # sim.plot_s_parameters([(i, j) for j in (2, 5) for i in range(1, 2 * len(ks_state) + 1)], k=0, normalize=True)
+    sim.plot_s_parameters([(6, 1), (1, 6)], k=0, normalize=True)
 
-    # sim.plot_s_parameters([(i, 3) for i in range(1, 2 * len(ks_state) + 1)], k=0, normalize=True)
-    # sim.plot_s_parameters([(3, i) for i in range(1, 2 * len(ks_state) + 1)], k=0, normalize=True)
-
-    # sim.plot_s_parameters([(i, 8) for i in range(1, 2 * len(ks_state) + 1)], k=0, normalize=True)
-    # sim.plot_s_parameters([(8, i) for i in range(1, 2 * len(ks_state) + 1)], k=0, normalize=True)
+    # sim.plot_s_parameters([(i, 2) for i in range(1, 2 * len(ks_state) + 1)], k=1, normalize=True)
+    # sim.plot_s_parameters([(2, i) for i in range(1, 2 * len(ks_state) + 1)], k=1, normalize=True)
     
     S = sim.get_s_matrix().array
-    itemindex = np.where(np.abs(S) > 1.0)
-    print("Over 0 db: ", (np.abs(S) > 1.0).sum())
-    # sim.plot_dispersion_relation(sideband=0)
-    # sim.plot_phase_matching(omega_signal=4.78*2*np.pi)
 
     log.info(f"f cutoff = {cfg.omega_cutoff / 2 / np.pi}")
 
@@ -112,35 +131,11 @@ def julia_comparison():
 
     _, _ = check_transfer_matrix_determinant(T_grid, tolerance=1e-18)
 
-    # # Build port wavenumber array (Nf, N) for k-weighted photon check
-    # _ws = cfg.omegas
-    # _wI = _ws + cfg.omega_pump
-    # _oc, _oj = cfg.omega_cutoff, cfg.omega_j
-    # _kS = dispersion_bloch_with_plasma(_ws, _oc, _oj)
-    # _kI = np.where(_wI < _oc, dispersion_bloch_with_plasma(_wI, _oc, _oj), np.nan)
-    # _port_ks = np.column_stack([_kS, _kI, _kS, _kI])  # [sig_L, idl_L, sig_R, idl_R]
-
-    # _, axes_phot = plt.subplots(1, 2, figsize=(12, 4))
-    # check_photon_conservation(
-    #     S_matrix,
-    #     cfg.omegas,
-    #     cfg.omega_pump,
-    #     cfg.ks_state,
-    #     port_ks=_port_ks,
-    #     ax=axes_phot[0],
-    # )
-    # check_energy_conservation(
-    #     S_matrix, cfg.omegas, cfg.omega_pump, cfg.ks_state, ax=axes_phot[1]
-    # )
-    # axes_phot[0].set_title("Quasi-photon check  (= 1 for lossless)")
-    # plt.tight_layout()
-
-    # check_pump_photon_balance(S_matrix, cfg.omegas, cfg.omega_pump, cfg.ks_state)
-
     # symbolic_matrix, _ = sim.get_symbolic_matrix()
     # a = CellSingleMode()
     # a.export_matrix_graphic(symbolic_matrix)
 
+    # _save_all("julia_comparison")
     plt.show()
 
 
@@ -209,11 +204,12 @@ def harmonics_comparison():
     # a = CellSingleMode()
     # a.export_matrix_graphic(symbolic_matrix)
 
+    # _save_all("harmonics_comparison")
     plt.show()
 
 
 def track_gap_center_over_pump_frequency():
-    pump_frequencies = np.linspace(1.5, 14, 12) * 2 * np.pi
+    pump_frequencies = np.linspace(1.5, 12, 12) * 2 * np.pi
 
     ks_state = [0, 1]
     ncell = 320
@@ -222,7 +218,7 @@ def track_gap_center_over_pump_frequency():
 
     freq_min = 1  # GHz
     freq_max = 12  # GHz
-    n_freqs = 500
+    n_freqs = 1000
     signal_freqs = np.linspace(freq_min, freq_max, n_freqs) * 2 * np.pi
 
     window_ghz = 1.0
@@ -255,12 +251,12 @@ def track_gap_center_over_pump_frequency():
         )
 
         sim = Simulation(JTLDiscrete, cfg)
-        smat = sim.get_s_matrix()
+        smat = sim.get_s_matrix(normalize=True)
         gap_min_index = np.abs(smat.array)[:, 1, 3].argmin()
         gap_min[index] = signal_freqs[gap_min_index] / 2 / np.pi
 
         fig_tmp, ax_tmp = plt.subplots()
-        check = check_photon_conservation(
+        check = check_photon_flux_conservation(
             smat.array, signal_freqs, w_p, ks_state, ax=ax_tmp
         )
         plt.close(fig_tmp)
@@ -303,17 +299,16 @@ def track_gap_center_over_pump_frequency():
             ((x_pair[0] + x_pair[1]) / 2, (y_pair[0] + y_pair[1]) / 2),
             textcoords="offset points",
             xytext=(0, 6),
-            fontsize=8,
+            fontsize=10,
             color="firebrick",
             ha="center",
         )
-    ax.legend(fontsize=10)
+    ax.legend()
 
-    ax.set_xlabel("Pump Frequency (GHz)", fontsize=13)
-    ax.set_ylabel("Gap Center Frequency (GHz)", fontsize=13)
-    ax.set_title("Gap Center vs. Pump Frequency", fontsize=14)
+    ax.set_xlabel("Pump Frequency (GHz)")
+    ax.set_ylabel("Gap Center Frequency (GHz)")
+    ax.set_title("Gap Center vs. Pump Frequency")
     ax.grid(True, linestyle="--", alpha=0.5)
-    ax.tick_params(labelsize=11)
     fig.tight_layout()
 
     fig2, ax2 = plt.subplots(figsize=(8, 5))
@@ -330,15 +325,13 @@ def track_gap_center_over_pump_frequency():
         im, ax=ax2, label=r"$\sum_i\,(\omega_i/\omega_j)\,|S_{ij}|^2$  (port 0)"
     )
     ax2.axhline(0, color="k", linestyle="--", linewidth=1, label="gap center")
-    ax2.set_xlabel("Pump Frequency (GHz)", fontsize=13)
-    ax2.set_ylabel("Frequency offset from gap center (GHz)", fontsize=13)
-    ax2.set_title(
-        "Photon conservation around gap center vs. pump frequency", fontsize=14
-    )
-    ax2.legend(fontsize=10)
-    ax2.tick_params(labelsize=11)
+    ax2.set_xlabel("Pump Frequency (GHz)")
+    ax2.set_ylabel("Frequency offset from gap center (GHz)")
+    ax2.set_title("Photon conservation around gap center vs. pump frequency")
+    ax2.legend()
     fig2.tight_layout()
 
+    # _save_all("track_gap_center")
     plt.show()
 
     return
@@ -348,18 +341,18 @@ def continuous_vs_discrete():
 
     cfg = SimulationConfig(
         Z0=50,
-        M=2,
-        ks_state=[0, 1, 2],
+        M=1,
+        ks_state=[-1, 0, 1],
         ncell=321,
         cell_size=10e-6,
         omega_cutoff=2 * 50 / 530e-3,  # 30 GHz
-        omega_pump=3.4 * 2 * np.pi,
+        omega_pump=13.31 * 2 * np.pi,
         omega_j=60 * 2 * np.pi,
-        epsilon=0.12,
+        epsilon=0.045,
         omega_c=3.4 * 2 * np.pi,
-        v_ratio=2.5,
+        v_ratio=-1.0,
         freq_min=1,
-        freq_max=12,
+        freq_max=14,
         n_freqs=500,  # increase to 5000 to see interesting spikes
         disorder=False,
         nramp=0,
@@ -371,12 +364,17 @@ def continuous_vs_discrete():
     # --- discrete ---
     sim = Simulation(JTLDiscrete, cfg)
     S = sim.get_s_matrix(normalize=True).array  # (Nf, 4, 4), 0-indexed
-    central_band = 0
+    central_band = 1
     transmitted_band = central_band + len(cfg.ks_state)
     S21_disc = np.abs(S[:, central_band+1, central_band]) ** 2
     S31_disc = np.abs(S[:, transmitted_band, central_band]) ** 2
 
-    energy_disc = (np.abs(S[:, :, central_band])**2).sum(axis=1)
+    # Ports with a negative signed frequency (idlers, ks<0) are pseudo-unitary
+    # partners rather than ordinary channels — a plain power sum overestimates
+    # gain there. Use the eta-weighted (Manley-Rowe) conservation law instead.
+    energy_disc = check_photon_flux_conservation(
+        S, omegas, cfg.omega_pump, cfg.ks_state
+    )[:, central_band]
 
     # --- continuous ---
     sim_cont = JTLContinuous(cfg)
@@ -399,7 +397,6 @@ def continuous_vs_discrete():
     fig.suptitle(
         f"Discrete vs Continuous  |  N={cfg.ncell}, ε={cfg.epsilon}, "
         f"fp={cfg.omega_pump / (2 * np.pi):.2f} GHz",
-        fontsize=12,
     )
     ax_s31, ax_s21, ax_dk, ax_en = axes[0, 0], axes[0, 1], axes[1, 0], axes[1, 1]
 
@@ -435,7 +432,7 @@ def continuous_vs_discrete():
     _vline(ax_s31)
     ax_s31.set_ylabel("|S31| (dB)")
     ax_s31.set_title("Signal transmission S31")
-    ax_s31.legend(fontsize=9)
+    ax_s31.legend()
     ax_s31.grid(True, alpha=0.3)
 
     # S21 — backward idler (main gap channel)
@@ -449,7 +446,7 @@ def continuous_vs_discrete():
     _vline(ax_s21)
     ax_s21.set_ylabel("|S21| (dB)")
     ax_s21.set_title("Backward idler S21")
-    ax_s21.legend(fontsize=9)
+    ax_s21.legend()
     ax_s21.grid(True, alpha=0.3)
 
     # Phase mismatch
@@ -459,7 +456,7 @@ def continuous_vs_discrete():
     ax_dk.set_xlabel("Frequency (GHz)")
     ax_dk.set_ylabel("Δk (rad/cell)")
     ax_dk.set_title("Phase mismatch = ks + kp - ki")
-    ax_dk.legend(fontsize=9)
+    ax_dk.legend()
     ax_dk.grid(True, alpha=0.3)
 
     # Energy conservation: (ωI/ωs)|S21| + |S31| ≈ 1
@@ -470,7 +467,7 @@ def continuous_vs_discrete():
     ax_en.set_xlabel("Frequency (GHz)")
     ax_en.set_ylabel("|S21|² + |S31|²")
     ax_en.set_title("Energy conservation check  (= 1 with pump)")
-    ax_en.legend(fontsize=9)
+    ax_en.legend()
     ax_en.grid(True, alpha=0.3)
 
     plt.tight_layout()
@@ -485,7 +482,6 @@ def continuous_vs_discrete():
     fig_err.suptitle(
         f"Discrete vs Continuous Model Error  |  N={cfg.ncell}, ε={cfg.epsilon}, "
         f"fp={cfg.omega_pump / (2 * np.pi):.2f} GHz",
-        fontsize=12,
     )
     ax_err.axhline(0, color="0.4", lw=1.0, ls="-", zorder=1)
     ax_err.plot(
@@ -493,7 +489,7 @@ def continuous_vs_discrete():
         S31_err_db,
         color="#C0392B",
         lw=1.6,
-        label="Discrete − Continuous",
+        label="Discrete - Continuous",
         zorder=3,
     )
     ax_err.fill_between(freqs_ghz, S31_err_db, 0, color="#C0392B", alpha=0.15, zorder=2)
@@ -509,12 +505,13 @@ def continuous_vs_discrete():
     ax_err.set_xlabel("Frequency (GHz)")
     ax_err.set_ylabel(r"$|S_{31}|$ error (dB)")
     ax_err.set_title("Signal transmission $S_{31}$: model discrepancy")
-    ax_err.legend(fontsize=9, loc="best", frameon=True)
+    ax_err.legend(loc="best", frameon=True)
     ax_err.grid(True, which="major", alpha=0.3)
     ax_err.minorticks_on()
     ax_err.grid(True, which="minor", alpha=0.1)
     fig_err.tight_layout()
 
+    # _save_all("continuous_vs_discrete")
     plt.show()
 
 
@@ -605,9 +602,88 @@ def compare_gap_bandwidth():
     ax.set_xlabel("Frequency (GHz)")
     ax.set_ylabel("|S31| (dB)")
     ax.set_title("Gap bandwidth: continuous model vs discrete")
-    ax.legend(fontsize=9)
+    ax.legend()
     ax.grid(True, alpha=0.3)
     plt.tight_layout()
+    # _save_all("compare_gap_bandwidth")
+    plt.show()
+
+
+def compare_dispersion_relations():
+    """
+    Overlay three dispersion curves on one plot:
+      1. Discrete  — numerical Bloch wavenumbers from JTLDiscrete transfer matrix
+                     (mirrors sim.plot_dispersion_relation: uses interior/middle cell)
+      2. Continuous linear          : k = 2ω / ωc
+      3. Continuous linear + plasma : k = 2ω / ωc / sqrt(1 - ω²/ωj²)
+    """
+    omega_cutoff = 2 * 50 / 530e-3
+    omega_j      = 30 * 2 * np.pi
+    # band edge of the discrete JTL: cos(ka)=-1 → solve 2(ω/ωc)²/(1-ω²/ωj²)=2
+    omega_max    = omega_cutoff / np.sqrt(1.0 + (omega_cutoff / omega_j) ** 2)
+    freq_max_ghz = omega_max / (2 * np.pi) * 0.999  # just below band edge
+
+    ncell = 11
+    cfg = SimulationConfig(
+        Z0=50,
+        M=1,
+        ks_state=[0],           # signal only — no coupling needed for bare dispersion
+        ncell=ncell,
+        cell_size=10e-6,
+        omega_cutoff=omega_cutoff,
+        omega_pump=6.8 * 2 * np.pi,
+        omega_j=omega_j,
+        epsilon=0.055,            # no pump modulation
+        omega_c=3.4 * 2 * np.pi,
+        v_ratio=2.5,
+        freq_min=0.1,
+        freq_max=freq_max_ghz,
+        n_freqs=1000,
+        disorder=False,
+        nramp=0,
+    )
+
+    # --- discrete: same as plot_dispersion_relation — use interior (middle) cell ---
+    sim = Simulation(JTLDiscrete, cfg)
+    T_grid = sim._get_T_grid()              # (Nf, Nc, dim, dim)
+    T_cell = T_grid[:, ncell // 2]         # middle interior cell, shape (Nf, 2, 2)
+    _, k_disc = bloch_wavenumbers(T_cell)  # (Nf, 2): [+k, -k] after descending sort
+
+    freqs  = cfg.freqs   # GHz
+    omegas = cfg.omegas  # rad/GHz
+
+    # --- analytical continuous dispersion relations ---
+    k_linear = dispersion_linear(omegas, cfg.omega_cutoff, cfg.omega_j)
+    k_lp     = dispersion_linear_with_plasma(omegas, cfg.omega_cutoff, cfg.omega_j)
+
+    fig, ax = plt.subplots(figsize=(7, 5))
+
+    # plot both ±k branches for each model
+    for branch in range(2):
+        ax.plot(k_disc[:, branch] / np.pi, freqs, lw=2.0, color="C0",
+                label="Discrete" if branch == 0 else None)
+    for sign, ls in [(+1, "--"), (-1, "--")]:
+        ax.plot(sign * k_linear / np.pi, freqs, lw=1.8, ls=ls, color="C1",
+                label=r"Continuous linear: $k = 2\omega/\omega_c$" if sign == 1 else None)
+    # for sign, ls in [(+1, ":"), (-1, ":")]:
+    #     ax.plot(sign * k_lp / np.pi, freqs, lw=1.8, ls=ls, color="C2",
+    #             label=r"Linear + plasma: $k = \frac{2\omega/\omega_c}{\sqrt{1 - \omega^2/\omega_j^2}}$" if sign == 1 else None)
+
+    ax.axvline( 1.0, color="gray", lw=0.8, ls="--", alpha=0.6, label=r"$k = \pm\pi$")
+    ax.axvline(-1.0, color="gray", lw=0.8, ls="--", alpha=0.6)
+    ax.axvline( 0.0, color="gray", lw=0.5, alpha=0.3)
+    ax.set_xlim(-1.1, 1.1)
+    ax.set_xlabel(r"$k\,/\,\pi$  (rad/cell)")
+    ax.set_ylabel("Frequency (GHz)")
+    ax.set_title(
+        rf"Dispersion relations  ($\omega_c/2\pi={cfg.omega_cutoff/(2*np.pi):.0f}$ GHz,"
+        rf" $\omega_J/2\pi={cfg.omega_j/(2*np.pi):.0f}$ GHz)"
+    )
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=2)
+
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    # _save_all("compare_dispersion_relations")
     plt.show()
 
 
@@ -616,13 +692,15 @@ if __name__ == "__main__":
 
     # main()
 
-    julia_comparison()
+    # julia_comparison()
 
     # track_gap_center_over_pump_frequency()
 
-    # continuous_vs_discrete()
+    continuous_vs_discrete()
 
     # compare_gap_bandwidth()
+
+    # compare_dispersion_relations()
 
 # linear in epsilon, kerr (no cross modulation, 3 wave mixing)
 # superimpose with center bandwidth

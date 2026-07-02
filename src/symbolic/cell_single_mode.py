@@ -385,7 +385,7 @@ class CellSingleMode:
                 self.omega_p: w_p,
             }
             for k in k_range:
-                omega_k = np.abs(w_s + k * w_p)
+                omega_k = w_s + k * w_p
                 subs[self.omega[k]] = omega_k
                 subs[self.Zs0(self.omega[k])] = cell.Zs0_fn(omega_k)
                 subs[self.Yg0(self.omega[k])] = cell.Yg0_fn(omega_k)
