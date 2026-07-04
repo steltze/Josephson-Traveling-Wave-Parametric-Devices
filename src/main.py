@@ -12,7 +12,10 @@ from examples.harmonics_comparison import harmonics_comparison
 from examples.track_gap_center_over_pump_frequency import (
     track_gap_center_over_pump_frequency,
 )
-from examples.discrete_vs_continuous import continuous_vs_discrete
+from examples.discrete_vs_continuous import (
+    continuous_vs_discrete_amplifier,
+    continuous_vs_discrete_converter,
+)
 from examples.compare_gap_bandwidth import compare_gap_bandwidth
 from examples.compare_dispersion_relations import compare_dispersion_relations
 from examples.utils import save_all
@@ -65,13 +68,15 @@ if __name__ == "__main__":
 
     # main()
 
-    julia_comparison()
+    # julia_comparison()
 
     # harmonics_comparison()
 
     # track_gap_center_over_pump_frequency()
 
-    # continuous_vs_discrete()
+    continuous_vs_discrete_amplifier()
+
+    # continuous_vs_discrete_converter()
 
     # compare_gap_bandwidth()
 

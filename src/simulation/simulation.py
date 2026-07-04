@@ -94,23 +94,6 @@ class Simulation:
                 Nf, Nc, N, _ = T_grid.shape
                 # Convert each per-cell T-matrix to S, then cascade via Redheffer star
                 Z0 = self._cfg.Z0
-                if False:
-                    def Z0_per_band(omega, omega_j, m):
-                        """Image impedance at harmonic order m: sqrt(Zs_harm(m)/Yg0) = 50/(1-w^2/wj^2)^((m+1)/2)."""
-                        return 50 / ((1 - (omega / omega_j)**2)**(1 / 2))
-
-                    def build_Z0vec(kbands, omega_s, omega_p, omega_j, M, ends=2):
-                        per_band = np.array([
-                            Z0_per_band(omega_s + k*omega_p, omega_j, m=min(k, M))
-                            for k in kbands
-                        ], dtype=complex)  # (len(kbands), Nf)
-                        # transpose to (Nf, len(kbands)) then tile ports -> (Nf, N)
-                        return np.tile(per_band.T, ends)
-
-                    Z0vec = build_Z0vec(self._cfg.ks_state, self._cfg.omegas, self._cfg.omega_pump, self._cfg.omega_j, self._cfg.M)
-                    # Z0vec is (Nf, N); expand to (Nf*Nc, N) to match the flattened ABCD batch
-                    Z0vec_expanded = np.repeat(Z0vec, Nc, axis=0)
-                    Z0 = Z0vec_expanded
 
                 S_cells = ABCD_to_S(np.linalg.inv(T_grid.reshape(Nf * Nc, N, N)), Z0).reshape(Nf, Nc, N, N)
 
@@ -120,7 +103,6 @@ class Simulation:
                 self._S_matrix = SMatrix(S_total, self._cfg.Z0)
 
             if normalize:
-                # D = diag(sqrt(w_k)), w_k = (1 - omega_k^2 / omega_j^2)^2 / omega_k
                 ks = np.asarray(self._cfg.ks_state)
                 port_omegas_half = np.abs(self._cfg.omegas[:, None] + ks[None, :] * self._cfg.omega_pump)  # (Nf, N//2)
                 port_omegas = np.concatenate([port_omegas_half, port_omegas_half], axis=1)  # (Nf, N)

@@ -15,36 +15,49 @@ from examples.utils import save_all
 log = get_logger(__name__)
 
 
-def continuous_vs_discrete():
-
-    cfg = SimulationConfig(
+def _base_config(**overrides):
+    cfg_kwargs = dict(
         Z0=50,
         M=1,
-        ks_state=[-1, 0, 1],
+        ks_state=[-1, 0],
         ncell=321,
         cell_size=10e-6,
         omega_cutoff=2 * 50 / 530e-3,  # 30 GHz
         omega_pump=13.31 * 2 * np.pi,
         omega_j=60 * 2 * np.pi,
-        epsilon=0.045,
+        epsilon=0.046,
         omega_c=3.4 * 2 * np.pi,
         v_ratio=-1.0,
         freq_min=1,
-        freq_max=14,
+        freq_max=13.0,
         n_freqs=500,  # increase to 5000 to see interesting spikes
         disorder=False,
         nramp=0,
     )
+    cfg_kwargs.update(overrides)
+    return SimulationConfig(**cfg_kwargs)
 
+
+def _discrete_vs_continuous(cfg, mode: str, idler_ks: int, label: str, save_name: str):
+    """
+    Compare the discrete Floquet solver against JTLContinuous's closed-form
+    coupled-mode BVP for a given interaction ``mode``.
+
+    ``idler_ks`` is the discrete sideband (a value from cfg.ks_state) that
+    corresponds to the continuous model's idler for this mode:
+        amplifier (ωI = ωs + ωp)  -> idler_ks = +1
+        converter (ωI = ωp - ωs)  -> idler_ks = -1
+    """
     freqs_ghz = cfg.freqs
     omegas = cfg.omegas
 
     # --- discrete ---
     sim = Simulation(JTLDiscrete, cfg)
     S = sim.get_s_matrix(normalize=True).array  # (Nf, 4, 4), 0-indexed
-    central_band = 1
+    central_band = cfg.ks_state.index(0)
+    # idler_band = cfg.ks_state.index(idler_ks)
     transmitted_band = central_band + len(cfg.ks_state)
-    S21_disc = np.abs(S[:, central_band+1, central_band]) ** 2
+    S21_disc = np.abs(S[:, 2, 1]) ** 2
     S31_disc = np.abs(S[:, transmitted_band, central_band]) ** 2
 
     # Ports with a negative signed frequency (idlers, ks<0) are pseudo-unitary
@@ -55,7 +68,7 @@ def continuous_vs_discrete():
     )[:, central_band]
 
     # --- continuous ---
-    sim_cont = JTLContinuous(cfg)
+    sim_cont = JTLContinuous(cfg, mode=mode)
     S_cont = sim_cont.get_s_matrix().array
     S31_cont = np.abs(S_cont[:, 2, 0]) ** 2
     S21_cont = np.abs(S_cont[:, 1, 0]) ** 2
@@ -64,16 +77,20 @@ def continuous_vs_discrete():
     gap_freq, gap_bandwidth = sim_cont.gap_bandwidth()
 
     log.info(
-        "Analytical gap centre: %.3f GHz   (discrete gap: find min of |S31|)",
+        "[%s] Analytical gap centre: %.3f GHz   (discrete gap: find min of |S31|)",
+        label,
         gap_freq / (2 * np.pi) if gap_freq is not None else float("nan"),
     )
 
-    energy_cont = S21_cont + S31_cont
+    if mode == "converter":
+        energy_cont = S21_cont + S31_cont
+    else:
+        energy_cont = S21_cont - S31_cont
 
     # --- 2×2 comparison plot ---
     fig, axes = plt.subplots(2, 2, figsize=(13, 8), sharex=True)
     fig.suptitle(
-        f"Discrete vs Continuous  |  N={cfg.ncell}, ε={cfg.epsilon}, "
+        f"Discrete vs Continuous — {label}  |  N={cfg.ncell}, ε={cfg.epsilon}, "
         f"fp={cfg.omega_pump / (2 * np.pi):.2f} GHz",
     )
     ax_s31, ax_s21, ax_dk, ax_en = axes[0, 0], axes[0, 1], axes[1, 0], axes[1, 1]
@@ -113,7 +130,7 @@ def continuous_vs_discrete():
     ax_s31.legend()
     ax_s31.grid(True, alpha=0.3)
 
-    # S21 — backward idler (main gap channel)
+    # S21 — idler (main gap channel)
     ax_s21.plot(freqs_ghz, 20 * np.log10(np.sqrt(S21_disc) + 1e-15), label="Discrete")
     ax_s21.plot(
         freqs_ghz,
@@ -123,7 +140,7 @@ def continuous_vs_discrete():
     )
     _vline(ax_s21)
     ax_s21.set_ylabel("|S21| (dB)")
-    ax_s21.set_title("Backward idler S21")
+    ax_s21.set_title(f"Idler S21 (ks={idler_ks})")
     ax_s21.legend()
     ax_s21.grid(True, alpha=0.3)
 
@@ -133,7 +150,7 @@ def continuous_vs_discrete():
     _vline(ax_dk)
     ax_dk.set_xlabel("Frequency (GHz)")
     ax_dk.set_ylabel("Δk (rad/cell)")
-    ax_dk.set_title("Phase mismatch = ks + kp - ki")
+    ax_dk.set_title("Phase mismatch = ks + ki - kp")
     ax_dk.legend()
     ax_dk.grid(True, alpha=0.3)
 
@@ -158,7 +175,7 @@ def continuous_vs_discrete():
 
     fig_err, ax_err = plt.subplots(figsize=(9, 4.5))
     fig_err.suptitle(
-        f"Discrete vs Continuous Model Error  |  N={cfg.ncell}, ε={cfg.epsilon}, "
+        f"Discrete vs Continuous Model Error — {label}  |  N={cfg.ncell}, ε={cfg.epsilon}, "
         f"fp={cfg.omega_pump / (2 * np.pi):.2f} GHz",
     )
     ax_err.axhline(0, color="0.4", lw=1.0, ls="-", zorder=1)
@@ -189,6 +206,29 @@ def continuous_vs_discrete():
     ax_err.grid(True, which="minor", alpha=0.1)
     fig_err.tight_layout()
 
-    # save_all("continuous_vs_discrete")
+    # save_all(save_name)
     plt.show()
 
+
+def continuous_vs_discrete_amplifier():
+    """Validate JTLContinuous's amplifier mode (ωI = ωs + ωp) against JTLDiscrete."""
+    cfg = _base_config()
+    _discrete_vs_continuous(
+        cfg,
+        mode="amplifier",
+        idler_ks=-1,
+        label="Amplifier, ωI=ωs+ωp",
+        save_name="continuous_vs_discrete",
+    )
+
+
+def continuous_vs_discrete_converter():
+    """Validate JTLContinuous's converter mode (ωI = ωp - ωs) against JTLDiscrete."""
+    cfg = _base_config()
+    _discrete_vs_continuous(
+        cfg,
+        mode="converter",
+        idler_ks=1,
+        label="Converter, ωI=ωp-ωs",
+        save_name="continuous_vs_discrete_converter",
+    )

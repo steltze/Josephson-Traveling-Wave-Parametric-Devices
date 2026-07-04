@@ -11,7 +11,7 @@ from solver.s_matrix import SMatrix
 from analysis.s_parameters import plot_s_parameters as _plot_s_params
 from logger import get_logger
 
-_log = get_logger(__name__)
+log = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -77,9 +77,24 @@ class JTLContinuous:
         dispersion_linear_with_plasma   k = 2ω/ωc / √(1-ω²/ωj²)
         dispersion_bloch                k = 2·arcsin(ω/ωc)
         dispersion_bloch_with_plasma    k = arccos(1-2(ω/ωc)²/(1-ω²/ωj²))
+
+    The interaction the coupled-mode BVP solves is also swappable via the
+    ``mode`` argument:
+
+        sim = JTLContinuous(cfg)                     # mode="amplifier" (default)
+        sim = JTLContinuous(cfg, mode="converter")
+
+    Mode options (both: S31 = cosh(√Δ·N), N = ncell):
+        "amplifier"  ωI = ωs + ωp (sum-frequency idler). Phase-conjugating
+                     backward-wave interaction: κ = kI + kS - kp enters Δ
+                     itself, Δ = q² - (κ/4)², q² = m²·kI·kS/16.
+        "converter"  ωI = ωp - ωs (difference-frequency idler). Photon-
+                     conserving backward-wave interaction: Δ = q² only (κ
+                     does not enter S31/S21, only the idler/gap bookkeeping).
     """
 
     dispersion_fn = staticmethod(dispersion_bloch_with_plasma)
+    mode: str = "amplifier"
 
     _DISPERSION_LABELS = {
         "dispersion_linear": "linear dispersion",
@@ -88,14 +103,29 @@ class JTLContinuous:
         "dispersion_bloch_with_plasma": "Bloch dispersion with plasma correction",
     }
 
-    def __init__(self, config, dispersion_fn=None) -> None:
+    _MODE_LABELS = {
+        "amplifier": "amplification (ωI = ωp - ωs)",
+        "converter": "conversion (ωI = ωp + ωs)",
+    }
+
+    def __init__(self, config, dispersion_fn=None, mode: str | None = None) -> None:
         self._cfg = config
         self._S_cache: SMatrix | None = None
         if dispersion_fn is not None:
             self.dispersion_fn = dispersion_fn
+        if mode is not None:
+            if mode not in self._MODE_LABELS:
+                raise ValueError(
+                    f"mode must be one of {sorted(self._MODE_LABELS)}, got {mode!r}"
+                )
+            self.mode = mode
         fn = self.dispersion_fn
         label = self._DISPERSION_LABELS.get(fn.__name__, fn.__name__)
-        _log.info("Using %s on the continuous model.", label)
+        log.info(
+            "Using %s on the continuous model in %s mode.",
+            label,
+            self._MODE_LABELS[self.mode],
+        )
 
     @classmethod
     def with_dispersion(cls, fn) -> type:
@@ -113,6 +143,13 @@ class JTLContinuous:
 
     def _k(self, omegas: np.ndarray) -> np.ndarray:
         return self.dispersion_fn(omegas, self._cfg.omega_cutoff, self._cfg.omega_j)
+
+    def _omega_idler(self, omegas: np.ndarray) -> np.ndarray:
+        """Idler angular frequency for the active mode."""
+        cfg = self._cfg
+        if self.mode == "amplifier":
+            return cfg.omega_pump - omegas
+        return omegas + cfg.omega_pump
 
     def _dk(self, omega: float) -> float:
         """Numerical d(k·a)/dω via central difference."""
@@ -133,7 +170,7 @@ class JTLContinuous:
             omegas = cfg.omegas
         omegas = np.asarray(omegas, dtype=float)
         kp = cfg.omega_pump * cfg.cell_size / cfg.v_pump
-        return self._k(omegas) + self._k(omegas + cfg.omega_pump) - kp
+        return self._k(omegas) + self._k(self._omega_idler(omegas)) - kp
 
     def gap_center(self) -> float | None:
         """Solve ks(ωg) + kI(ωg+ωp) = kp. Returns None if no solution."""
@@ -144,11 +181,16 @@ class JTLContinuous:
             if ws <= 0.0:
                 return float("nan")
             return float(
-                self._k(np.float64(ws)) + self._k(np.float64(ws + cfg.omega_pump)) - kp
+                self._k(np.float64(ws))
+                + self._k(np.float64(self._omega_idler(ws)))
+                - kp
             )
 
         lo = cfg.omega_cutoff * 1e-4
-        hi = (cfg.omega_cutoff - cfg.omega_pump) * 0.999
+        if self.mode == "converter":
+            hi = min(cfg.omega_cutoff, cfg.omega_pump) * 0.999
+        else:
+            hi = (cfg.omega_cutoff - cfg.omega_pump) * 0.999
         if hi <= lo:
             return None
         r_lo, r_hi = residual(lo), residual(hi)
@@ -165,7 +207,7 @@ class JTLContinuous:
         if omega_gap is None:
             return None, None
 
-        omega_I_gap = omega_gap + cfg.omega_pump
+        omega_I_gap = self._omega_idler(omega_gap)
         kS0 = float(self._k(np.float64(omega_gap)))
         kI0 = float(self._k(np.float64(omega_I_gap)))
 
@@ -188,41 +230,54 @@ class JTLContinuous:
     def _compute_s_matrix(self) -> SMatrix:
         cfg = self._cfg
         omegas = cfg.omegas
-        omega_I = omegas + cfg.omega_pump
-        valid = omega_I < cfg.omega_cutoff
-        omega_I_c = np.where(valid, omega_I, cfg.omega_cutoff * 0.9999)
+        omega_I = self._omega_idler(omegas)
 
         kS = self._k(omegas)
-        kI = self._k(omega_I_c)
-        kp = cfg.omega_pump * cfg.cell_size / cfg.v_pump
-        kappa = kS + kI - kp  # ks + kp = ki but kp, ki < 0 so we do -kp, -(-ki)
-
+        kI = self._k(omega_I)
         m_eff = 2.0 * cfg.epsilon
-
-        q = (
-            -m_eff / 4.0 * np.emath.sqrt((kS) * (kI))
-        )  # no corrections added, (kS - kappa) * (kI + kappa)
-
         N = cfg.ncell
-        Delta = q**2 - (kappa / 2.0) ** 2
-        Delta_sqrt = np.emath.sqrt(Delta)
 
-        S31 = np.where(
-            valid,
-            np.exp(-0.5j * kappa * N)
-            / (
-                np.cosh(Delta_sqrt * N)
-                + 0.5j * kappa / Delta_sqrt * np.sinh(Delta_sqrt * N)
-            ),
-            np.nan + 0j,
-        )
+        if self.mode == "converter":
+            log.info("Continuous model mode: converter")
 
-        gS = m_eff / 4.0 * kS  # no correction added, kI / (kI + kappa)
-        S21 = np.where(
-            valid,
-            np.exp(0.5j * kappa * N) * gS / Delta_sqrt * np.sinh(Delta_sqrt * N) * S31,
-            np.nan + 0j,
-        )
+            kp = cfg.omega_pump * cfg.cell_size / cfg.v_pump
+            kappa = kS + kI - kp  # ks + kp = ki but kp, ki < 0 so we do -kp, -(-ki)
+
+            m_eff = 2.0 * cfg.epsilon
+
+            q = (
+                -m_eff / 4.0 * np.emath.sqrt((kS) * (kI))
+            )  # no corrections added, (kS - kappa) * (kI + kappa)
+
+            N = cfg.ncell
+            Delta = q**2 - (kappa / 2.0) ** 2
+            Delta_sqrt = np.emath.sqrt(Delta)
+
+            S31 = np.exp(-0.5j * kappa * N) / (
+                    np.cosh(Delta_sqrt * N)
+                    + 0.5j * kappa / Delta_sqrt * np.sinh(Delta_sqrt * N)
+                )
+
+            gS = m_eff / 4.0 * kS  # no correction added, kI / (kI + kappa)
+            S21 = np.exp(0.5j * kappa * N) * gS / Delta_sqrt * np.sinh(Delta_sqrt * N) * S31
+
+        else:
+            log.info("Continuous model mode: amplifier")
+
+            kp = cfg.omega_pump * cfg.cell_size / (-cfg.v_pump)
+            kappa = kS + kI - kp  
+            
+            q_sq = (m_eff**2) * kI * kS / 16.0
+            Delta = q_sq - (kappa / 2.0) ** 2
+            Delta_sqrt = np.emath.sqrt(Delta)
+
+            S31 = np.exp(-0.5j * kappa * N) * (np.cosh(Delta_sqrt * N) + 1j * kappa / 2 / Delta_sqrt * np.sinh(Delta_sqrt * N))
+            S21 = np.conjugate(
+                        np.exp(0.5j * kappa * N)
+                        * (-m_eff / 4.0 * kS)
+                        / Delta_sqrt
+                        * np.sinh(Delta_sqrt * N)
+                    )
 
         Nf = len(omegas)
         data = np.zeros((Nf, 4, 4), dtype=complex)
