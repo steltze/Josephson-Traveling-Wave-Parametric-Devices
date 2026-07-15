@@ -18,10 +18,10 @@ def _abcd_to_s_single(abcd: np.ndarray, z0: np.ndarray) -> np.ndarray:
     N = abcd.shape[0]
     k = N // 2
 
-    A = abcd[:k, :k]
-    B = abcd[:k, k:]
-    C = abcd[k:, :k]
-    D = abcd[k:, k:]
+    A = np.ascontiguousarray(abcd[:k, :k])
+    B = np.ascontiguousarray(abcd[:k, k:])
+    C = np.ascontiguousarray(abcd[k:, :k])
+    D = np.ascontiguousarray(abcd[k:, k:])
 
     eye = np.eye(k, dtype=np.complex128)
     Cinv_CinvD = np.linalg.solve(C, np.concatenate((eye, D), axis=1))
@@ -68,15 +68,15 @@ def _redheffer_star_single(s2: np.ndarray, s1: np.ndarray) -> np.ndarray:
     N = s1.shape[0]
     k = N // 2
 
-    S1_11 = s1[:k, :k]
-    S1_12 = s1[:k, k:]
-    S1_21 = s1[k:, :k]
-    S1_22 = s1[k:, k:]
+    S1_11 = np.ascontiguousarray(s1[:k, :k])
+    S1_12 = np.ascontiguousarray(s1[:k, k:])
+    S1_21 = np.ascontiguousarray(s1[k:, :k])
+    S1_22 = np.ascontiguousarray(s1[k:, k:])
 
-    S2_11 = s2[:k, :k]
-    S2_12 = s2[:k, k:]
-    S2_21 = s2[k:, :k]
-    S2_22 = s2[k:, k:]
+    S2_11 = np.ascontiguousarray(s2[:k, :k])
+    S2_12 = np.ascontiguousarray(s2[:k, k:])
+    S2_21 = np.ascontiguousarray(s2[k:, :k])
+    S2_22 = np.ascontiguousarray(s2[k:, k:])
 
     eye_k = np.eye(k, dtype=np.complex128)
 
