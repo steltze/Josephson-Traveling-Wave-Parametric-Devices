@@ -6,7 +6,7 @@ from logger import get_logger, setup_logging
 log = get_logger(__name__)
 from simulation import SimulationConfig, Simulation
 from models import JTLDiscrete
-from symbolic import CellSingleMode
+from symbolic_solver import CellSingleMode
 from examples.julia_comparison import julia_comparison
 from examples.harmonics_comparison import harmonics_comparison
 from examples.track_gap_center_over_pump_frequency import (

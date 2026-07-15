@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 from sympy import exp, I, simplify, expand, Function
 
-from src.symbolic.cell_single_mode import CellSingleMode
+from src.symbolic_solver.cell_single_mode import CellSingleMode
 from src.models.cell import CellImmitance
 
 

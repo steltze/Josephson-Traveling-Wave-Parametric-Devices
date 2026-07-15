@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 if TYPE_CHECKING:
-    from solver.s_matrix import SMatrix
+    from numerical_solver.s_matrix import SMatrix
 
 
 class ABCDMatrix:
@@ -87,7 +87,7 @@ class ABCDMatrix:
 
     def to_S(self, Z0: float = 50.0) -> "SMatrix":
         """Convert to an SMatrix."""
-        from solver.s_matrix import SMatrix
+        from numerical_solver.s_matrix import SMatrix
 
         return SMatrix.from_ABCD(self._data, Z0)
 

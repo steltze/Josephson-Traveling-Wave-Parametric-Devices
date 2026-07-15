@@ -7,7 +7,7 @@ from __future__ import annotations
 import numpy as np
 from scipy.optimize import brentq
 
-from solver.s_matrix import SMatrix
+from numerical_solver.s_matrix import SMatrix
 from analysis.s_parameters import plot_s_parameters as _plot_s_params
 from logger import get_logger
 

@@ -6,8 +6,8 @@ from typing import Sequence, Tuple
 import numpy as np
 import matplotlib.pyplot as plt
 
-from symbolic.cell_single_mode import CellSingleMode
-from solver.s_matrix import SMatrix, ABCD_to_S, redheffer_star
+from symbolic_solver.cell_single_mode import CellSingleMode
+from numerical_solver.s_matrix import SMatrix, ABCD_to_S, redheffer_star
 from analysis.dispersion_relation import bloch_wavenumbers
 from analysis.s_parameters import plot_s_parameters as _plot_s_params
 from logger import get_logger, timer as _timer
