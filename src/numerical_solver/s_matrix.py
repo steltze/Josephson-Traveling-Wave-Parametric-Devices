@@ -32,6 +32,28 @@ def redheffer_star(
     )
 
 
+def cascade_all(S_cells: np.ndarray, backend: Backend | str | None = None) -> np.ndarray:
+    """
+    Cascade a stack of per-cell S-matrices into one total S-matrix.
+
+    Parameters
+    ----------
+    S_cells : ndarray, shape (Nf, Nc, N, N), N even
+        Per-cell S-matrices for Nc cells, ordered left (input) to right
+        (output).
+    backend : Backend, backend name, or None
+        Numerical backend to run the cascade on. Defaults to "numpy", or
+        the $TWPA_BACKEND environment variable if set. Backends that fuse
+        the whole reduction into one compiled kernel (e.g. "numba") avoid
+        Nc separate `redheffer_star` dispatches — see `Backend.cascade_all`.
+
+    Returns
+    -------
+    ndarray, shape (Nf, N, N)
+    """
+    return _resolve_backend(backend).cascade_all(np.asarray(S_cells, dtype=complex))
+
+
 def ABCD_to_S(ABCD: np.ndarray, Z0, backend: Backend | str | None = None) -> np.ndarray:
     """
     Convert ABCD transfer matrix to S-parameters.

@@ -52,11 +52,13 @@ def _discrete_vs_continuous(
 
     ``backend`` selects the numerical backend for the discrete cascade (see
     ``backends.available_backends()``). Defaults to "numpy". Note that for
-    this config's port count (N=4, from ks_state=[-1, 0]) and its ~320
-    sequential per-cell cascade steps, the "numba" backend measures ~2x
-    *slower* than "numpy" — its JIT/thread-dispatch overhead dominates
-    when there's this little work per call. It pays off on configs with
-    more sidebands (larger M / longer ks_state), not this one.
+    this config's port count (N=4, from ks_state=[-1, 0]), the "numba"
+    backend measures ~2x *slower* than "numpy", even with the whole
+    per-cell cascade fused into one compiled call (Backend.cascade_all) —
+    the bottleneck for this config isn't Python-level dispatch, it's fixed
+    per-call overhead in solving many tiny (2x2) complex linear systems.
+    Numba pulls ahead once the port count grows (larger M / longer
+    ks_state means bigger per-frequency solves), not for this config.
     """
     log.info(f"f cutoff = {cfg.omega_cutoff / 2 / np.pi}")
 

@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 
 from backends import Backend
 from symbolic_solver.cell_single_mode import CellSingleMode
-from numerical_solver.s_matrix import SMatrix, ABCD_to_S, redheffer_star
+from numerical_solver.s_matrix import SMatrix, ABCD_to_S, cascade_all
 from analysis.dispersion_relation import bloch_wavenumbers
 from analysis.s_parameters import plot_s_parameters as _plot_s_params
 from logger import get_logger, timer as _timer
@@ -107,9 +107,7 @@ class Simulation:
                     np.linalg.inv(T_grid.reshape(Nf * Nc, N, N)), Z0, backend=self._backend
                 ).reshape(Nf, Nc, N, N)
 
-                S_total = S_cells[:, 0]
-                for c in range(1, Nc):
-                    S_total = redheffer_star(S_cells[:, c], S_total, backend=self._backend)
+                S_total = cascade_all(S_cells, backend=self._backend)
                 self._S_matrix = SMatrix(S_total, self._cfg.Z0)
 
             if normalize:

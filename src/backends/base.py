@@ -54,5 +54,33 @@ class Backend(ABC):
         ndarray, complex, shape (Nf, N, N)
         """
 
+    def cascade_all(self, s_cells: np.ndarray) -> np.ndarray:
+        """
+        Cascade a stack of per-cell S-matrices into one total S-matrix.
+
+        Parameters
+        ----------
+        s_cells : ndarray, complex, shape (Nf, Nc, N, N), N even
+            Per-cell S-matrices for Nc cells, ordered left (input) to
+            right (output).
+
+        Returns
+        -------
+        ndarray, complex, shape (Nf, N, N)
+
+        Default implementation: sequentially reduces via `redheffer_star`,
+        one call per cell (Nc calls total) — this is what
+        `Simulation.get_s_matrix` did directly before this method existed.
+        A backend whose `redheffer_star` overhead is dominated by per-call
+        dispatch rather than by the work itself (e.g. a JIT backend with
+        many small cells) should override this to fuse the whole
+        reduction into a single compiled kernel instead.
+        """
+        Nc = s_cells.shape[1]
+        total = s_cells[:, 0]
+        for c in range(1, Nc):
+            total = self.redheffer_star(s_cells[:, c], total)
+        return total
+
     def __repr__(self) -> str:
         return f"{type(self).__name__}(name={self.name!r})"

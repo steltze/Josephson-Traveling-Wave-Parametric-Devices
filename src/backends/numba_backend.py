@@ -107,17 +107,36 @@ def _redheffer_star_batch(s2: np.ndarray, s1: np.ndarray) -> np.ndarray:
     return S
 
 
+@numba.njit(parallel=True, cache=True)
+def _cascade_all_batch(s_cells: np.ndarray) -> np.ndarray:
+    """Reduce all Nc cells per frequency inside one compiled call — no
+    per-cell Python-level dispatch, unlike calling redheffer_star Nc times."""
+    Nf, Nc, N, _ = s_cells.shape
+    S = np.empty((Nf, N, N), dtype=np.complex128)
+    for f in numba.prange(Nf):
+        total = s_cells[f, 0]
+        for c in range(1, Nc):
+            total = _redheffer_star_single(s_cells[f, c], total)
+        S[f] = total
+    return S
+
+
 class NumbaBackend(Backend):
     """
     JIT-compiled, multi-threaded backend (Numba `@njit(parallel=True)`).
 
-    Same numerics as `NumpyBackend`. NumPy's batched `linalg.solve` loops
-    over the frequency axis internally, issuing one LAPACK call per small
-    matrix; this backend instead compiles an explicit per-frequency kernel
-    and runs it across the frequency axis with `numba.prange`, spreading
-    the many small, independent solves over threads. First call per input
-    shape/dtype pays a JIT compilation cost, so this pays off on large
-    `Nf` sweeps run repeatedly, not one-off small ones.
+    Same numerics as `NumpyBackend`, executed by compiling an explicit
+    per-frequency kernel and running it across the frequency axis with
+    `numba.prange`. First call per input shape/dtype pays a JIT
+    compilation cost.
+
+    Measured behaviour (see `cascade_all`'s docstring for the benchmark
+    setup): this backend wins over NumpyBackend as the port count N grows
+    (more Floquet sidebands — larger M / longer ks_state), and loses for
+    small N (e.g. N=4, the common single-idler case) even after fusing
+    the whole cell cascade into one call. For small N the bottleneck is
+    not Python dispatch but the fixed per-call cost of solving many tiny
+    linear systems — fusing removes the former but not the latter.
 
     Requires the optional `numba` dependency: `pip install .[numba]`.
     """
@@ -129,3 +148,20 @@ class NumbaBackend(Backend):
 
     def redheffer_star(self, s2: np.ndarray, s1: np.ndarray) -> np.ndarray:
         return _redheffer_star_batch(np.ascontiguousarray(s2), np.ascontiguousarray(s1))
+
+    def cascade_all(self, s_cells: np.ndarray) -> np.ndarray:
+        """
+        Fused cascade: the whole per-cell reduction compiles to one kernel
+        (single dispatch for all Nc cells, vs Nc calls into `redheffer_star`
+        from Python for the default `Backend.cascade_all`).
+
+        Measured on a 321-cell, 500-frequency-point cascade: this closes
+        essentially none of the gap at N=4 (fused: still ~2x slower than
+        NumPy) — the cost there is dominated by the per-call overhead of
+        `np.linalg.solve` on many tiny (k=2) systems, not by Python
+        dispatch, so fusing the outer loop doesn't touch it. It matters
+        more as N grows: ~1.6x faster than NumPy at N=12, ~2.4x at N=16,
+        where each per-frequency solve is large enough for that per-call
+        overhead to stop dominating.
+        """
+        return _cascade_all_batch(np.ascontiguousarray(s_cells))

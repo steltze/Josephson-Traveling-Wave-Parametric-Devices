@@ -67,6 +67,20 @@ class TestNumbaMatchesNumpy:
             NumbaBackend().redheffer_star(S_id, S), S, atol=1e-10
         )
 
+    @pytest.mark.parametrize("N", [2, 4, 6])
+    @pytest.mark.parametrize("Nc", [1, 2, 5])
+    def test_cascade_all_matches_numpy(self, N, Nc):
+        """The fused numba cascade_all matches NumpyBackend's default reduce."""
+        rng = np.random.default_rng(600 + N * 10 + Nc)
+        Nf = 4
+        s_cells = rng.standard_normal((Nf, Nc, N, N)) + 1j * rng.standard_normal(
+            (Nf, Nc, N, N)
+        )
+
+        expected = NumpyBackend().cascade_all(s_cells)
+        actual = NumbaBackend().cascade_all(s_cells)
+        np.testing.assert_allclose(actual, expected, atol=1e-9)
+
 
 class TestNumbaViaRegistry:
     def test_get_backend_numba(self):
@@ -82,3 +96,15 @@ class TestNumbaViaRegistry:
         default = ABCD_to_S(T, 50.0)
         via_numba = ABCD_to_S(T, 50.0, backend="numba")
         np.testing.assert_allclose(default, via_numba, atol=1e-10)
+
+    def test_cascade_all_accepts_numba_backend(self):
+        from numerical_solver.s_matrix import cascade_all
+
+        rng = np.random.default_rng(700)
+        Nf, Nc, N = 3, 4, 4
+        s_cells = rng.standard_normal((Nf, Nc, N, N)) + 1j * rng.standard_normal(
+            (Nf, Nc, N, N)
+        )
+        default = cascade_all(s_cells)
+        via_numba = cascade_all(s_cells, backend="numba")
+        np.testing.assert_allclose(default, via_numba, atol=1e-9)
