@@ -49,7 +49,7 @@ def dispersion_bloch_with_plasma(
     """k·a = arccos(1 - 2(ω/ωc)² / (1 - ω²/ωj²))  (full discrete JTL)."""
     w = np.asarray(omegas, dtype=float)
     denom = 1.0 - (w / omega_j) ** 2
-    arg = np.clip(1.0 - 2.0 * (w / omega_cutoff) ** 2 / denom, -1.0, 1.0)
+    arg = 1.0 - 2.0 * (w / omega_cutoff) ** 2 / denom
     return np.arccos(arg)
 
 
@@ -169,8 +169,14 @@ class JTLContinuous:
         if omegas is None:
             omegas = cfg.omegas
         omegas = np.asarray(omegas, dtype=float)
-        kp = cfg.omega_pump * cfg.cell_size / cfg.v_pump
-        return self._k(omegas) + self._k(self._omega_idler(omegas)) - kp
+        kp = cfg.omega_pump * cfg.cell_size / (cfg.propagation_direction*cfg.v_pump)
+
+        kS = self._k(omegas)
+        kI = cfg.propagation_direction*self._k(self._omega_idler(omegas))
+
+        if self.mode == "converter":
+            return kS - kI + kp
+        return kS + kI + kp
 
     def gap_center(self) -> float | None:
         """Solve ks(ωg) + kI(ωg+ωp) = kp. Returns None if no solution."""
@@ -233,24 +239,22 @@ class JTLContinuous:
         omega_I = self._omega_idler(omegas)
 
         kS = self._k(omegas)
-        kI = self._k(omega_I)
+        kI = cfg.propagation_direction*self._k(omega_I)
         m_eff = 2.0 * cfg.epsilon
         N = cfg.ncell
 
         if self.mode == "converter":
             log.info("Continuous model mode: converter")
 
-            kp = cfg.omega_pump * cfg.cell_size / cfg.v_pump
-            kappa = kS + kI - kp  # ks + kp = ki but kp, ki < 0 so we do -kp, -(-ki)
+            kp = cfg.omega_pump * cfg.cell_size / (cfg.propagation_direction*cfg.v_pump)
+            kappa = kS - kI + kp  # ks + kp = ki but kp, ki < 0 so we do -kp, -(-ki)
 
-            m_eff = 2.0 * cfg.epsilon
-
-            q = (
-                -m_eff / 4.0 * np.emath.sqrt((kS) * (kI))
+            q_sq = (
+                -m_eff**2 / 16.0 * kS * kI
             )  # no corrections added, (kS - kappa) * (kI + kappa)
 
             N = cfg.ncell
-            Delta = q**2 - (kappa / 2.0) ** 2
+            Delta = q_sq - (kappa / 2.0) ** 2
             Delta_sqrt = np.emath.sqrt(Delta)
 
             S31 = np.exp(-0.5j * kappa * N) / (
@@ -264,8 +268,8 @@ class JTLContinuous:
         else:
             log.info("Continuous model mode: amplifier")
 
-            kp = cfg.omega_pump * cfg.cell_size / (-cfg.v_pump)
-            kappa = kS + kI - kp  
+            kp = cfg.omega_pump * cfg.cell_size / (cfg.propagation_direction*cfg.v_pump)
+            kappa = kS + kI + kp  
             
             q_sq = (m_eff**2) * kI * kS / 16.0
             Delta = q_sq - (kappa / 2.0) ** 2
@@ -282,7 +286,7 @@ class JTLContinuous:
         Nf = len(omegas)
         data = np.zeros((Nf, 4, 4), dtype=complex)
         data[:, 2, 0] = S31
-        data[:, 1, 0] = S21 * np.sqrt(kI / kS)
+        data[:, 1, 0] = S21 * np.sqrt(np.abs(kI / kS))
         return SMatrix(data, cfg.Z0)
 
     # ------------------------------------------------------------------

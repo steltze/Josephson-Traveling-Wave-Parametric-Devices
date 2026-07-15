@@ -17,7 +17,7 @@ log = get_logger(__name__)
 
 
 def julia_comparison():
-    ks_state = [-1, 0, 1]
+    ks_state = [0, 1]
     M = 1
     ncell = 320+1
     cfg = SimulationConfig(
@@ -27,15 +27,15 @@ def julia_comparison():
         ncell=ncell,
         cell_size=10e-6,
         omega_cutoff=2 * 50 / 540e-3,  # L = 530 pH, C = 212 fF -> ~30 GHz
-        omega_pump=3.4 * 2 * np.pi,
+        omega_pump=6.8 * 2 * np.pi,
         omega_j=60 * 2 * np.pi,  # usually smaller
-        epsilon=0.25,  # 10% inductance modulation (|Φ_RF| = 0.01 Φ_0)
+        epsilon=0.04,  # 10% inductance modulation (|Φ_RF| = 0.01 Φ_0)
         omega_c=3.4
         * 2
         * np.pi,  # gap: well in the S parameter from signal to tranmission
         v_ratio=2.5,
         freq_min=3.5,  # GHz
-        freq_max=14,  # GHz
+        freq_max=6.1,  # GHz
         n_freqs=500,
         disorder=False,
         nramp=0,
@@ -74,29 +74,29 @@ def julia_comparison():
     # a = CellSingleMode()
     # a.export_matrix_graphic(symbolic_matrix)
 
-    # save_all("julia_comparison")
-    epsilon_max = 0.3
-    epsilon_values = np.linspace(0.05, epsilon_max, 2)
-    # cmap = plt.get_cmap("viridis")
+    # save_all(prefix="julia_comp", fmt="svg")
+    # epsilon_max = 0.3
+    # epsilon_values = np.linspace(0.05, epsilon_max, 2)
+    # # cmap = plt.get_cmap("viridis")
 
-    fig, ax2 = plt.subplots()
-    for i, eps in enumerate(epsilon_values):
-        if np.isclose(eps, cfg.epsilon):  # cfg.epsilon (0.25) already simulated as S_ph
-            S_ph_eps = S_ph
-        else:
-            cfg_eps = replace(cfg, epsilon=eps)
-            sim_eps = Simulation(JTLDiscrete, cfg_eps)
-            S_ph_eps = sim_eps.get_s_matrix(normalize=True).array
-        ax2.plot(
-            cfg.freqs,
-            (10*np.log10(np.abs(S_ph_eps) ** 2))[:, 3, 1],
-            label=f"e={eps:.2f}",
-        )
-    ax2.set_xlabel("Frequency (GHz)")
-    ax2.set_ylabel(r"$|S_{i," + str(central_band) + r"}|^2$ (dB)")
-    ax2.set_title("Signal transmission vs. modulation depth")
-    ax2.legend()
-    ax2.grid(True, alpha=0.3)
+    # fig, ax2 = plt.subplots()
+    # for i, eps in enumerate(epsilon_values):
+    #     if np.isclose(eps, cfg.epsilon):  # cfg.epsilon (0.25) already simulated as S_ph
+    #         S_ph_eps = S_ph
+    #     else:
+    #         cfg_eps = replace(cfg, epsilon=eps)
+    #         sim_eps = Simulation(JTLDiscrete, cfg_eps)
+    #         S_ph_eps = sim_eps.get_s_matrix(normalize=True).array
+    #     ax2.plot(
+    #         cfg.freqs,
+    #         (10*np.log10(np.abs(S_ph_eps) ** 2))[:, 3, 1],
+    #         label=f"e={eps:.2f}",
+    #     )
+    # ax2.set_xlabel("Frequency (GHz)")
+    # ax2.set_ylabel(r"$|S_{i," + str(central_band) + r"}|^2$ (dB)")
+    # ax2.set_title("Signal transmission vs. modulation depth")
+    # ax2.legend()
+    # ax2.grid(True, alpha=0.3)
 
     plt.show()
 

@@ -14,6 +14,7 @@ def plot_s_parameters(
     freq_scale: float = 1,
     freq_label: str = "Frequency (GHz)",
     ylim: tuple | None = None,
+    plot_phase: bool = False,
 ) -> plt.Axes:
     """
     Plot selected S-parameters in dB vs frequency.
@@ -27,10 +28,11 @@ def plot_s_parameters(
     freq_scale : divisor for the x-axis (default 1 → GHz as-is)
     freq_label : x-axis label string
     ylim       : optional (ymin, ymax) for the y-axis
+    plot_phase : if True (default), also plot phase; if False, only magnitude
 
     Returns
     -------
-    ax : the Axes used for plotting
+    ax_mag, ax_phase : the Axes used for plotting (ax_phase is None if plot_phase is False)
     """
     S_matrix = np.asarray(S_matrix)
 
@@ -45,11 +47,15 @@ def plot_s_parameters(
         raise ValueError(f"freqs length {freqs.shape[0]} does not match Nf={Nf}")
 
     if ax is None:
-        fig, (ax_mag, ax_phase) = plt.subplots(2, 1, sharex=True, figsize=(12, 8))
+        if plot_phase:
+            fig, (ax_mag, ax_phase) = plt.subplots(2, 1, sharex=True, figsize=(12, 8))
+        else:
+            fig, ax_mag = plt.subplots(1, 1, figsize=(8, 5))
+            ax_phase = None
     else:
-        # If user provides only one axis, create a twin axis for phase
         ax_mag = ax
-        ax_phase = ax.twinx()
+        # If user provides only one axis, create a twin axis for phase
+        ax_phase = ax.twinx() if plot_phase else None
 
     x = freqs / freq_scale
 
@@ -59,15 +65,20 @@ def plot_s_parameters(
         # Magnitude in dB
         db = 20.0 * np.log10(np.abs(s_param))
 
-        # Phase (unwrapped)
-        angles = np.unwrap(np.angle(s_param), axis=0)
-
         ax_mag.plot(x, db, label=f"S{i}{j} | Mag")
-        ax_phase.plot(x, angles, linestyle="--", label=f"S{i}{j} | Phase")
+
+        if plot_phase:
+            # Phase (unwrapped)
+            angles = np.unwrap(np.angle(s_param), axis=0)
+            ax_phase.plot(x, angles, linestyle="--", label=f"S{i}{j} | Phase")
 
     ax_mag.set_ylabel("Magnitude (dB)")
-    ax_phase.set_xlabel(freq_label)
-    ax_phase.set_ylabel("Phase (rad)")
+
+    if plot_phase:
+        ax_phase.set_xlabel(freq_label)
+        ax_phase.set_ylabel("Phase (rad)")
+    else:
+        ax_mag.set_xlabel(freq_label)
 
     if ylim is not None:
         ax_mag.set_ylim(ylim)
@@ -76,7 +87,10 @@ def plot_s_parameters(
 
     # Combine legends from both axes
     lines1, labels1 = ax_mag.get_legend_handles_labels()
-    lines2, labels2 = ax_phase.get_legend_handles_labels()
-    ax_mag.legend(lines1 + lines2, labels1 + labels2, loc="best")
+    if plot_phase:
+        lines2, labels2 = ax_phase.get_legend_handles_labels()
+        ax_mag.legend(lines1 + lines2, labels1 + labels2, loc="best")
+    else:
+        ax_mag.legend(lines1, labels1, loc="best")
 
     return ax_mag, ax_phase

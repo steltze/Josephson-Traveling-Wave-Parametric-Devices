@@ -22,14 +22,14 @@ def _base_config(**overrides):
         ks_state=[-1, 0],
         ncell=321,
         cell_size=10e-6,
-        omega_cutoff=2 * 50 / 530e-3,  # 30 GHz
+        omega_cutoff=2 * 50 / 540e-3,
         omega_pump=13.31 * 2 * np.pi,
         omega_j=60 * 2 * np.pi,
-        epsilon=0.046,
+        epsilon=0.04,
         omega_c=3.4 * 2 * np.pi,
         v_ratio=-1.0,
         freq_min=1,
-        freq_max=13.0,
+        freq_max=14,
         n_freqs=500,  # increase to 5000 to see interesting spikes
         disorder=False,
         nramp=0,
@@ -48,6 +48,8 @@ def _discrete_vs_continuous(cfg, mode: str, idler_ks: int, label: str, save_name
         amplifier (ωI = ωs + ωp)  -> idler_ks = +1
         converter (ωI = ωp - ωs)  -> idler_ks = -1
     """
+    log.info(f"f cutoff = {cfg.omega_cutoff / 2 / np.pi}")
+
     freqs_ghz = cfg.freqs
     omegas = cfg.omegas
 
@@ -57,7 +59,7 @@ def _discrete_vs_continuous(cfg, mode: str, idler_ks: int, label: str, save_name
     central_band = cfg.ks_state.index(0)
     # idler_band = cfg.ks_state.index(idler_ks)
     transmitted_band = central_band + len(cfg.ks_state)
-    S21_disc = np.abs(S[:, 2, 1]) ** 2
+    S21_disc = np.abs(S[:, transmitted_band-1, central_band]) ** 2
     S31_disc = np.abs(S[:, transmitted_band, central_band]) ** 2
 
     # Ports with a negative signed frequency (idlers, ks<0) are pseudo-unitary
@@ -106,7 +108,7 @@ def _discrete_vs_continuous(cfg, mode: str, idler_ks: int, label: str, save_name
                     color="gray",
                     alpha=0.15,
                     zorder=0,
-                    label="gap (cont.)",
+                    label="gap width",
                 )
             ax.axvline(
                 gap_freq / (2 * np.pi),
@@ -125,8 +127,8 @@ def _discrete_vs_continuous(cfg, mode: str, idler_ks: int, label: str, save_name
         label="Continuous",
     )
     _vline(ax_s31)
-    ax_s31.set_ylabel("|S31| (dB)")
-    ax_s31.set_title("Signal transmission S31")
+    ax_s31.set_ylabel(r"$|S_{s_L \rightarrow s_R}| (dB)$")
+    ax_s31.set_title(r"Signal transmission $S_{s_L \rightarrow s_R}$")
     ax_s31.legend()
     ax_s31.grid(True, alpha=0.3)
 
@@ -139,8 +141,8 @@ def _discrete_vs_continuous(cfg, mode: str, idler_ks: int, label: str, save_name
         label="Continuous",
     )
     _vline(ax_s21)
-    ax_s21.set_ylabel("|S21| (dB)")
-    ax_s21.set_title(f"Idler S21 (ks={idler_ks})")
+    ax_s21.set_ylabel(r"$|S_{s_L \rightarrow i_L}| (dB)$")
+    ax_s21.set_title(r"Signal conversion $S_{s_L \rightarrow i_L}$")
     ax_s21.legend()
     ax_s21.grid(True, alpha=0.3)
 
@@ -150,7 +152,7 @@ def _discrete_vs_continuous(cfg, mode: str, idler_ks: int, label: str, save_name
     _vline(ax_dk)
     ax_dk.set_xlabel("Frequency (GHz)")
     ax_dk.set_ylabel("Δk (rad/cell)")
-    ax_dk.set_title("Phase mismatch = ks + ki - kp")
+    ax_dk.set_title("Phase mismatch = ks + kp - ki")
     ax_dk.legend()
     ax_dk.grid(True, alpha=0.3)
 
@@ -173,11 +175,11 @@ def _discrete_vs_continuous(cfg, mode: str, idler_ks: int, label: str, save_name
     S31_err_db = S31_disc_db - S31_cont_db
     rms_err_db = np.sqrt(np.mean(S31_err_db**2))
 
-    fig_err, ax_err = plt.subplots(figsize=(9, 4.5))
-    fig_err.suptitle(
-        f"Discrete vs Continuous Model Error — {label}  |  N={cfg.ncell}, ε={cfg.epsilon}, "
-        f"fp={cfg.omega_pump / (2 * np.pi):.2f} GHz",
-    )
+    fig_err, ax_err = plt.subplots(figsize=(8, 5))
+    # fig_err.suptitle(
+    #     f"Discrete vs Continuous Model Error — {label}  |  N={cfg.ncell}, ε={cfg.epsilon}, "
+    #     f"fp={cfg.omega_pump / (2 * np.pi):.2f} GHz",
+    # )
     ax_err.axhline(0, color="0.4", lw=1.0, ls="-", zorder=1)
     ax_err.plot(
         freqs_ghz,
@@ -198,15 +200,15 @@ def _discrete_vs_continuous(cfg, mode: str, idler_ks: int, label: str, save_name
     # )
     _vline(ax_err)
     ax_err.set_xlabel("Frequency (GHz)")
-    ax_err.set_ylabel(r"$|S_{31}|$ error (dB)")
-    ax_err.set_title("Signal transmission $S_{31}$: model discrepancy")
+    ax_err.set_ylabel(r"$S_{s_L \rightarrow s_R}$ error (dB)")
+    ax_err.set_title(r"Signal transmission $S_{s_L \rightarrow s_R}$: model discrepancy")
     ax_err.legend(loc="best", frameon=True)
     ax_err.grid(True, which="major", alpha=0.3)
     ax_err.minorticks_on()
     ax_err.grid(True, which="minor", alpha=0.1)
     fig_err.tight_layout()
 
-    # save_all(save_name)
+    # save_all(prefix=save_name, fmt="svg")
     plt.show()
 
 
@@ -218,7 +220,7 @@ def continuous_vs_discrete_amplifier():
         mode="amplifier",
         idler_ks=-1,
         label="Amplifier, ωI=ωs+ωp",
-        save_name="continuous_vs_discrete",
+        save_name="continuous_vs_discrete_amplifier",
     )
 
 

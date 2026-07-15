@@ -387,8 +387,15 @@ class CellSingleMode:
             for k in k_range:
                 omega_k = w_s + k * w_p
                 subs[self.omega[k]] = omega_k
-                subs[self.Zs0(self.omega[k])] = cell.Zs0_fn(omega_k)
+
+                n_sb = cell.Zs_harm_fn.shape[1]
+                k_stepped_up = k + np.abs(N_min)
+
+                subs[self.Zs0(self.omega[k])] = cell.Zs_harm_fn[:, k_stepped_up, k_stepped_up] if 0 <= k_stepped_up < n_sb else zeros
                 subs[self.Yg0(self.omega[k])] = cell.Yg0_fn(omega_k)
+
+                # subs[self.Zs0(self.omega[k])] = cell.Zs0_fn(omega_k)
+                # subs[self.Yg0(self.omega[k])] = cell.Yg0_fn(omega_k)
                 for mi, (Zm_p, Zm_m) in enumerate(
                     zip(Zs_syms_p, Zs_syms_m), start=1
                 ):
@@ -399,8 +406,7 @@ class CellSingleMode:
                         # Full coupling matrix (Nf, n_sb, n_sb): [:, target, source]
                         # Zm_p: source=k, target=k+mi (exp(+I*mi*theta), lower source)
                         # Zm_m: source=k, target=k-mi (exp(-I*mi*theta), upper source)
-                        n_sb = cell.Zs_harm_fn.shape[1]
-                        k_stepped_up = k + np.abs(N_min)
+
                         k_fwd, k_bwd = k_stepped_up + mi, k_stepped_up - mi
                         val_p = (
 
