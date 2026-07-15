@@ -3,11 +3,14 @@ name = "TWPA-TWPC-Simulator"
 version = "0.1.0"
 requires-python = ">=3.10"
 description = ""
+dependencies = [
+    "numpy>=1.24",
+    "matplotlib>=3.7",
+    "scipy>=1.10",
+]
 
-[project.dependencies]
-numpy = ">=1.24"
-matplotlib = ">=3.7"
-scipy = ">=1.10"
+[project.optional-dependencies]
+numba = ["numba>=0.59"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

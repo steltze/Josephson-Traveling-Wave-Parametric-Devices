@@ -74,7 +74,7 @@ if __name__ == "__main__":
 
     # track_gap_center_over_pump_frequency()
 
-    continuous_vs_discrete_amplifier()
+    continuous_vs_discrete_amplifier(backend="numba")
     # continuous_vs_discrete_converter()
 
     # compare_gap_bandwidth()

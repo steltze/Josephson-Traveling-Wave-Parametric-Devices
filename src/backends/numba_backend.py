@@ -1,0 +1,131 @@
+from __future__ import annotations
+
+import numpy as np
+
+from backends.base import Backend
+
+try:
+    import numba
+except ImportError as exc:  # surfaced by registry.get_backend as a chained ImportError
+    raise ImportError(
+        "The 'numba' backend requires the numba package. Install it with "
+        "`pip install .[numba]`."
+    ) from exc
+
+
+@numba.njit(cache=True)
+def _abcd_to_s_single(abcd: np.ndarray, z0: np.ndarray) -> np.ndarray:
+    N = abcd.shape[0]
+    k = N // 2
+
+    A = abcd[:k, :k]
+    B = abcd[:k, k:]
+    C = abcd[k:, :k]
+    D = abcd[k:, k:]
+
+    eye = np.eye(k, dtype=np.complex128)
+    Cinv_CinvD = np.linalg.solve(C, np.concatenate((eye, D), axis=1))
+    Cinv = np.ascontiguousarray(Cinv_CinvD[:, :k])
+    CinvD = np.ascontiguousarray(Cinv_CinvD[:, k:])
+
+    Z = np.empty((N, N), dtype=np.complex128)
+    Z[:k, :k] = A @ Cinv
+    Z[:k, k:] = (A @ D - B @ C) @ Cinv
+    Z[k:, :k] = Cinv
+    Z[k:, k:] = CinvD
+
+    Z0d = np.zeros((N, N), dtype=np.complex128)
+    Z0cd = np.zeros((N, N), dtype=np.complex128)
+    for i in range(N):
+        Z0d[i, i] = z0[i]
+        Z0cd[i, i] = np.conj(z0[i])
+
+    G0 = np.real(z0)
+    sqrtG0 = np.sqrt(G0)
+    inv_sqrtG0 = 1.0 / sqrtG0
+
+    X = np.linalg.solve((Z + Z0d).T, (Z - Z0cd).T)
+    S0 = X.T
+
+    S = np.empty((N, N), dtype=np.complex128)
+    for i in range(N):
+        for j in range(N):
+            S[i, j] = sqrtG0[i] * S0[i, j] * inv_sqrtG0[j]
+    return S
+
+
+@numba.njit(parallel=True, cache=True)
+def _abcd_to_s_batch(abcd: np.ndarray, z0: np.ndarray) -> np.ndarray:
+    Nf, N, _ = abcd.shape
+    S = np.empty((Nf, N, N), dtype=np.complex128)
+    for f in numba.prange(Nf):
+        S[f] = _abcd_to_s_single(abcd[f], z0[f])
+    return S
+
+
+@numba.njit(cache=True)
+def _redheffer_star_single(s2: np.ndarray, s1: np.ndarray) -> np.ndarray:
+    N = s1.shape[0]
+    k = N // 2
+
+    S1_11 = s1[:k, :k]
+    S1_12 = s1[:k, k:]
+    S1_21 = s1[k:, :k]
+    S1_22 = s1[k:, k:]
+
+    S2_11 = s2[:k, :k]
+    S2_12 = s2[:k, k:]
+    S2_21 = s2[k:, :k]
+    S2_22 = s2[k:, k:]
+
+    eye_k = np.eye(k, dtype=np.complex128)
+
+    A1 = eye_k - S2_11 @ S1_22
+    X1 = np.linalg.solve(A1, np.concatenate((S2_11 @ S1_21, S2_12), axis=1))
+    X1_left = np.ascontiguousarray(X1[:, :k])
+    X1_right = np.ascontiguousarray(X1[:, k:])
+
+    A2 = eye_k - S1_22 @ S2_11
+    X2 = np.linalg.solve(A2, np.concatenate((S1_21, S1_22 @ S2_12), axis=1))
+    X2_left = np.ascontiguousarray(X2[:, :k])
+    X2_right = np.ascontiguousarray(X2[:, k:])
+
+    S = np.empty((N, N), dtype=np.complex128)
+    S[:k, :k] = S1_11 + S1_12 @ X1_left
+    S[:k, k:] = S1_12 @ X1_right
+    S[k:, :k] = S2_21 @ X2_left
+    S[k:, k:] = S2_22 + S2_21 @ X2_right
+    return S
+
+
+@numba.njit(parallel=True, cache=True)
+def _redheffer_star_batch(s2: np.ndarray, s1: np.ndarray) -> np.ndarray:
+    Nf, N, _ = s1.shape
+    S = np.empty((Nf, N, N), dtype=np.complex128)
+    for f in numba.prange(Nf):
+        S[f] = _redheffer_star_single(s2[f], s1[f])
+    return S
+
+
+class NumbaBackend(Backend):
+    """
+    JIT-compiled, multi-threaded backend (Numba `@njit(parallel=True)`).
+
+    Same numerics as `NumpyBackend`. NumPy's batched `linalg.solve` loops
+    over the frequency axis internally, issuing one LAPACK call per small
+    matrix; this backend instead compiles an explicit per-frequency kernel
+    and runs it across the frequency axis with `numba.prange`, spreading
+    the many small, independent solves over threads. First call per input
+    shape/dtype pays a JIT compilation cost, so this pays off on large
+    `Nf` sweeps run repeatedly, not one-off small ones.
+
+    Requires the optional `numba` dependency: `pip install .[numba]`.
+    """
+
+    name = "numba"
+
+    def abcd_to_s(self, abcd: np.ndarray, z0: np.ndarray) -> np.ndarray:
+        return _abcd_to_s_batch(np.ascontiguousarray(abcd), np.ascontiguousarray(z0))
+
+    def redheffer_star(self, s2: np.ndarray, s1: np.ndarray) -> np.ndarray:
+        return _redheffer_star_batch(np.ascontiguousarray(s2), np.ascontiguousarray(s1))

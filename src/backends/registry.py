@@ -13,6 +13,7 @@ _ENV_VAR = "TWPA_BACKEND"
 # everyone who imports this package.
 _REGISTRY: dict[str, tuple[str, str]] = {
     "numpy": ("backends.numpy_backend", "NumpyBackend"),
+    "numba": ("backends.numba_backend", "NumbaBackend"),
 }
 
 _instances: dict[str, Backend] = {}

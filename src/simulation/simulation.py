@@ -6,6 +6,7 @@ from typing import Sequence, Tuple
 import numpy as np
 import matplotlib.pyplot as plt
 
+from backends import Backend
 from symbolic_solver.cell_single_mode import CellSingleMode
 from numerical_solver.s_matrix import SMatrix, ABCD_to_S, redheffer_star
 from analysis.dispersion_relation import bloch_wavenumbers
@@ -25,6 +26,10 @@ class Simulation:
         Cell model factory (e.g. JTL).
     config : SimulationConfig
         All physical and numerical parameters.
+    backend : Backend, backend name, or None
+        Numerical backend for the ABCD-to-S conversion and Redheffer-star
+        cascade (see `backends.available_backends()`). Defaults to "numpy",
+        or the $TWPA_BACKEND environment variable if set.
 
     Examples
     --------
@@ -34,11 +39,14 @@ class Simulation:
     >>> sim.plot_s_parameters([(3, 1), (1, 1)])
     >>> sim.plot_dispersion_relation()
     >>> plt.show()
+
+    >>> sim = Simulation(JTL, cfg, backend="numba")  # JIT + multi-threaded cascade
     """
 
-    def __init__(self, cell_cls, config) -> None:
+    def __init__(self, cell_cls, config, backend: Backend | str | None = None) -> None:
         self._cell_cls = cell_cls
         self._cfg = config
+        self._backend = backend
         self._model = CellSingleMode()
 
         self._T_sym = None
@@ -95,11 +103,13 @@ class Simulation:
                 # Convert each per-cell T-matrix to S, then cascade via Redheffer star
                 Z0 = self._cfg.Z0
 
-                S_cells = ABCD_to_S(np.linalg.inv(T_grid.reshape(Nf * Nc, N, N)), Z0).reshape(Nf, Nc, N, N)
+                S_cells = ABCD_to_S(
+                    np.linalg.inv(T_grid.reshape(Nf * Nc, N, N)), Z0, backend=self._backend
+                ).reshape(Nf, Nc, N, N)
 
                 S_total = S_cells[:, 0]
                 for c in range(1, Nc):
-                    S_total = redheffer_star(S_cells[:, c], S_total)
+                    S_total = redheffer_star(S_cells[:, c], S_total, backend=self._backend)
                 self._S_matrix = SMatrix(S_total, self._cfg.Z0)
 
             if normalize:

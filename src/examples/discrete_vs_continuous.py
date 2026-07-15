@@ -19,7 +19,7 @@ def _base_config(**overrides):
     cfg_kwargs = dict(
         Z0=50,
         M=1,
-        ks_state=[-1, 0],
+        ks_state=[-3, -2, -1, 0],
         ncell=321,
         cell_size=10e-6,
         omega_cutoff=2 * 50 / 540e-3,
@@ -38,7 +38,9 @@ def _base_config(**overrides):
     return SimulationConfig(**cfg_kwargs)
 
 
-def _discrete_vs_continuous(cfg, mode: str, idler_ks: int, label: str, save_name: str):
+def _discrete_vs_continuous(
+    cfg, mode: str, idler_ks: int, label: str, save_name: str, backend=None
+):
     """
     Compare the discrete Floquet solver against JTLContinuous's closed-form
     coupled-mode BVP for a given interaction ``mode``.
@@ -47,6 +49,14 @@ def _discrete_vs_continuous(cfg, mode: str, idler_ks: int, label: str, save_name
     corresponds to the continuous model's idler for this mode:
         amplifier (ωI = ωs + ωp)  -> idler_ks = +1
         converter (ωI = ωp - ωs)  -> idler_ks = -1
+
+    ``backend`` selects the numerical backend for the discrete cascade (see
+    ``backends.available_backends()``). Defaults to "numpy". Note that for
+    this config's port count (N=4, from ks_state=[-1, 0]) and its ~320
+    sequential per-cell cascade steps, the "numba" backend measures ~2x
+    *slower* than "numpy" — its JIT/thread-dispatch overhead dominates
+    when there's this little work per call. It pays off on configs with
+    more sidebands (larger M / longer ks_state), not this one.
     """
     log.info(f"f cutoff = {cfg.omega_cutoff / 2 / np.pi}")
 
@@ -54,7 +64,7 @@ def _discrete_vs_continuous(cfg, mode: str, idler_ks: int, label: str, save_name
     omegas = cfg.omegas
 
     # --- discrete ---
-    sim = Simulation(JTLDiscrete, cfg)
+    sim = Simulation(JTLDiscrete, cfg, backend=backend)
     S = sim.get_s_matrix(normalize=True).array  # (Nf, 4, 4), 0-indexed
     central_band = cfg.ks_state.index(0)
     # idler_band = cfg.ks_state.index(idler_ks)
@@ -212,8 +222,14 @@ def _discrete_vs_continuous(cfg, mode: str, idler_ks: int, label: str, save_name
     plt.show()
 
 
-def continuous_vs_discrete_amplifier():
-    """Validate JTLContinuous's amplifier mode (ωI = ωs + ωp) against JTLDiscrete."""
+def continuous_vs_discrete_amplifier(backend=None):
+    """
+    Validate JTLContinuous's amplifier mode (ωI = ωs + ωp) against JTLDiscrete.
+
+    backend : numerical backend for the discrete cascade, e.g. "numba"
+        (see `backends.available_backends()`; default "numpy" — see the
+        perf note on `_discrete_vs_continuous` before switching this).
+    """
     cfg = _base_config()
     _discrete_vs_continuous(
         cfg,
@@ -221,11 +237,18 @@ def continuous_vs_discrete_amplifier():
         idler_ks=-1,
         label="Amplifier, ωI=ωs+ωp",
         save_name="continuous_vs_discrete_amplifier",
+        backend=backend,
     )
 
 
-def continuous_vs_discrete_converter():
-    """Validate JTLContinuous's converter mode (ωI = ωp - ωs) against JTLDiscrete."""
+def continuous_vs_discrete_converter(backend=None):
+    """
+    Validate JTLContinuous's converter mode (ωI = ωp - ωs) against JTLDiscrete.
+
+    backend : numerical backend for the discrete cascade, e.g. "numba"
+        (see `backends.available_backends()`; default "numpy" — see the
+        perf note on `_discrete_vs_continuous` before switching this).
+    """
     cfg = _base_config()
     _discrete_vs_continuous(
         cfg,
@@ -233,4 +256,5 @@ def continuous_vs_discrete_converter():
         idler_ks=1,
         label="Converter, ωI=ωp-ωs",
         save_name="continuous_vs_discrete_converter",
+        backend=backend,
     )
