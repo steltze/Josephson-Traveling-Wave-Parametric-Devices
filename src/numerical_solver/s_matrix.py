@@ -1,7 +1,15 @@
 import numpy as np
 
+from backends import Backend, get_backend
 
-def redheffer_star(S2: np.ndarray, S1: np.ndarray) -> np.ndarray:
+
+def _resolve_backend(backend: Backend | str | None) -> Backend:
+    return backend if isinstance(backend, Backend) else get_backend(backend)
+
+
+def redheffer_star(
+    S2: np.ndarray, S1: np.ndarray, backend: Backend | str | None = None
+) -> np.ndarray:
     """
     Redheffer star product for cascading two N-port S-matrices.
 
@@ -10,69 +18,37 @@ def redheffer_star(S2: np.ndarray, S1: np.ndarray) -> np.ndarray:
     Parameters
     ----------
     S1, S2 : ndarray, shape (Nf, N, N), N even
+    backend : Backend, backend name, or None
+        Numerical backend to run the cascade on. Defaults to "numpy", or
+        the $TWPA_BACKEND environment variable if set. See
+        `backends.available_backends()`.
 
     Returns
     -------
     ndarray, shape (Nf, N, N)
     """
-    Nf, N, _ = S1.shape
-    k = N // 2
+    return _resolve_backend(backend).redheffer_star(
+        np.asarray(S2, dtype=complex), np.asarray(S1, dtype=complex)
+    )
 
-    S1_11 = S1[:, :k, :k]
-    S1_12 = S1[:, :k, k:]
-    S1_21 = S1[:, k:, :k]
-    S1_22 = S1[:, k:, k:]
 
-    S2_11 = S2[:, :k, :k]
-    S2_12 = S2[:, :k, k:]
-    S2_21 = S2[:, k:, :k]
-    S2_22 = S2[:, k:, k:]
-
-    # Solve (I - S2_11 @ S1_22) @ X = [S2_11 @ S1_21, S2_12]
-    A1 = np.eye(k)[None] - S2_11 @ S1_22
-    X1 = np.linalg.solve(A1, np.concatenate([S2_11 @ S1_21, S2_12], axis=-1))
-
-    # Solve (I - S1_22 @ S2_11) @ X = [S1_21, S1_22 @ S2_12]
-    A2 = np.eye(k)[None] - S1_22 @ S2_11
-    X2 = np.linalg.solve(A2, np.concatenate([S1_21, S1_22 @ S2_12], axis=-1))
-
-    S = np.empty((Nf, N, N), dtype=complex)
-    S[:, :k, :k] = S1_11 + S1_12 @ X1[:, :, :k]
-    S[:, :k, k:] = S1_12 @ X1[:, :, k:]
-    S[:, k:, :k] = S2_21 @ X2[:, :, :k]
-    S[:, k:, k:] = S2_22 + S2_21 @ X2[:, :, k:]
-
-    return S
-
-def ABCD_to_S(ABCD: np.ndarray, Z0) -> np.ndarray:
+def ABCD_to_S(ABCD: np.ndarray, Z0, backend: Backend | str | None = None) -> np.ndarray:
     """
     Convert ABCD transfer matrix to S-parameters.
 
     Z0 : scalar (ohms) for uniform real reference, OR
          array shape (N,) / (Nf, N) giving per-port reference impedance
          (complex allowed). N is the number of ports = matrix dimension.
+    backend : Backend, backend name, or None
+        Numerical backend to run the conversion on. Defaults to "numpy", or
+        the $TWPA_BACKEND environment variable if set. See
+        `backends.available_backends()`.
     """
+    ABCD = np.asarray(ABCD, dtype=complex)
     batched = ABCD.ndim == 3
     if not batched:
         ABCD = ABCD[None]
     Nf, N, _ = ABCD.shape
-    k = N // 2
-
-    A = ABCD[:, :k, :k]
-    B = ABCD[:, :k, k:]
-    C = ABCD[:, k:, :k]
-    D = ABCD[:, k:, k:]
-
-    eye = np.broadcast_to(np.eye(k, dtype=complex), (Nf, k, k))
-    Cinv_CinvD = np.linalg.solve(C, np.concatenate([eye, D], axis=-1))
-    Cinv  = Cinv_CinvD[:, :, :k]
-    CinvD = Cinv_CinvD[:, :, k:]
-
-    Z = np.empty((Nf, N, N), dtype=complex)
-    Z[:, :k, :k] = A @ Cinv
-    Z[:, :k, k:] = (A @ D - B @ C) @ Cinv   # = (AD - BC) C^{-1}
-    Z[:, k:, :k] = Cinv
-    Z[:, k:, k:] = CinvD
 
     # --- per-port reference impedance ---
     Z0 = np.asarray(Z0, dtype=complex)
@@ -83,26 +59,7 @@ def ABCD_to_S(ABCD: np.ndarray, Z0) -> np.ndarray:
     else:                                  # (Nf, N)
         Z0vec = Z0
 
-    # diagonal matrices  diag(Z0)  and  diag(conj(Z0))
-    Z0d  = np.zeros((Nf, N, N), dtype=complex)
-    Z0cd = np.zeros((Nf, N, N), dtype=complex)
-    idx = np.arange(N)
-    Z0d[:, idx, idx]  = Z0vec
-    Z0cd[:, idx, idx] = np.conj(Z0vec)
-
-    # power-wave S = √G0 (Z - Z0*) (Z + Z0)^{-1} √G0^{-1}
-    G0 = np.real(Z0vec)
-    sqrtG0     = np.sqrt(G0)               # (Nf, N)
-    inv_sqrtG0 = 1.0 / sqrtG0
-
-    M = Z - Z0cd                           # numerator
-    P = Z + Z0d                            # denominator
-    # right-solve P^{-1}: S0 = M P^{-1}  ->  P^T S0^T = M^T
-    S0 = np.linalg.solve(P.swapaxes(-1, -2), M.swapaxes(-1, -2)).swapaxes(-1, -2)
-
-    # apply the diagonal √G0 (·) √G0^{-1} as row/column scaling
-    S = sqrtG0[:, :, None] * S0 * inv_sqrtG0[:, None, :]
-
+    S = _resolve_backend(backend).abcd_to_s(ABCD, Z0vec)
     return S[0] if not batched else S
 
 
@@ -126,7 +83,9 @@ class SMatrix:
         self.Z0 = float(Z0)
 
     @classmethod
-    def from_ABCD(cls, ABCD: np.ndarray, Z0: float = 50.0) -> "SMatrix":
+    def from_ABCD(
+        cls, ABCD: np.ndarray, Z0: float = 50.0, backend: Backend | str | None = None
+    ) -> "SMatrix":
         """
         Construct from an ABCD transfer matrix.
 
@@ -134,8 +93,10 @@ class SMatrix:
         ----------
         ABCD : ndarray, shape (N, N) or (Nf, N, N), N even
         Z0   : reference impedance (ohms)
+        backend : Backend, backend name, or None
+            Numerical backend to run the conversion on (see `ABCD_to_S`).
         """
-        return cls(ABCD_to_S(ABCD, Z0), Z0)
+        return cls(ABCD_to_S(ABCD, Z0, backend=backend), Z0)
 
     @property
     def array(self) -> np.ndarray:
@@ -156,15 +117,27 @@ class SMatrix:
         """Port count."""
         return self._data.shape[1]
 
-    def __matmul__(self, other: "SMatrix") -> "SMatrix":
-        """Cascade self (left/input) with other (right/output) via Redheffer star."""
-        if not isinstance(other, SMatrix):
-            return NotImplemented
+    def cascade(self, other: "SMatrix", backend: Backend | str | None = None) -> "SMatrix":
+        """
+        Cascade self (left/input) with other (right/output) via Redheffer star.
+
+        Parameters
+        ----------
+        other : SMatrix
+        backend : Backend, backend name, or None
+            Numerical backend to run the cascade on (see `redheffer_star`).
+        """
         if self.Z0 != other.Z0:
             raise ValueError(f"Z0 mismatch: {self.Z0} vs {other.Z0}")
         if self.N != other.N:
             raise ValueError(f"Port-count mismatch: {self.N} vs {other.N}")
-        return SMatrix(redheffer_star(other._data, self._data), self.Z0)
+        return SMatrix(redheffer_star(other._data, self._data, backend=backend), self.Z0)
+
+    def __matmul__(self, other: "SMatrix") -> "SMatrix":
+        """Cascade self (left/input) with other (right/output) via Redheffer star."""
+        if not isinstance(other, SMatrix):
+            return NotImplemented
+        return self.cascade(other)
 
     def __getitem__(self, idx) -> "SMatrix":
         """Index along the frequency axis, returning a new SMatrix."""

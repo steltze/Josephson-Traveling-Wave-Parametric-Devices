@@ -4,6 +4,8 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from backends import Backend
+
 if TYPE_CHECKING:
     from numerical_solver.s_matrix import SMatrix
 
@@ -85,11 +87,20 @@ class ABCDMatrix:
             sliced = sliced[None]
         return ABCDMatrix(sliced)
 
-    def to_S(self, Z0: float = 50.0) -> "SMatrix":
-        """Convert to an SMatrix."""
+    def to_S(self, Z0: float = 50.0, backend: Backend | str | None = None) -> "SMatrix":
+        """
+        Convert to an SMatrix.
+
+        Parameters
+        ----------
+        Z0 : reference impedance (ohms)
+        backend : Backend, backend name, or None
+            Numerical backend to run the conversion on (see
+            `numerical_solver.s_matrix.ABCD_to_S`).
+        """
         from numerical_solver.s_matrix import SMatrix
 
-        return SMatrix.from_ABCD(self._data, Z0)
+        return SMatrix.from_ABCD(self._data, Z0, backend=backend)
 
     def __repr__(self) -> str:
         return f"ABCDMatrix(shape={self.shape})"
