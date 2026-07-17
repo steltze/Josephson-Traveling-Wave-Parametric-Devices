@@ -56,7 +56,9 @@ class Simulation:
         self._Yg_m_p = None
         self._Yg_m_m = None
         self._T_grid = None
+        self._S_cells = None
         self._S_matrix: SMatrix | None = None
+        self._S_matrix_normalized: bool | None = None
 
     def get_symbolic_matrix(self):
         """
@@ -81,6 +83,26 @@ class Simulation:
                 )
         return self._T_sym, self._state_syms
 
+    def get_s_cells(self) -> np.ndarray:
+        """
+        Return the per-cell S-matrices (pre-cascade), shape (Nf, Nc, N, N).
+
+        This is the input to `numerical_solver.s_matrix.cascade_all` inside
+        `get_s_matrix`, exposed on its own so that cascade-level diagnostics
+        (`analysis.checks.check_cascade_associativity`,
+        `check_cascade_conditioning`, `check_backend_agreement`,
+        `plot_gain_vs_ncell`, ...) can inspect the cascade before/without
+        reducing it to a single total S-matrix.
+        """
+        if self._S_cells is None:
+            T_grid = self._get_T_grid()  # (Nf, Nc, N, N)
+            Nf, Nc, N, _ = T_grid.shape
+            Z0 = self._cfg.Z0
+            self._S_cells = ABCD_to_S(
+                np.linalg.inv(T_grid.reshape(Nf * Nc, N, N)), Z0, backend=self._backend
+            ).reshape(Nf, Nc, N, N)
+        return self._S_cells
+
     def get_s_matrix(self, normalize: bool = False) -> SMatrix:
         """
         Return the cascaded S-matrix.
@@ -96,17 +118,10 @@ class Simulation:
             impedance: weight w_k = (1 - ω_k²/ω_j²)² / ω_k, for port
             frequency ω_k and junction plasma frequency ω_j.
         """
-        if self._S_matrix is None:
+        if self._S_matrix is None or self._S_matrix_normalized != normalize:
             with _timer("S-matrix cascade"):
-                T_grid = self._get_T_grid()  # (Nf, Nc, N, N)
-                Nf, Nc, N, _ = T_grid.shape
                 # Convert each per-cell T-matrix to S, then cascade via Redheffer star
-                Z0 = self._cfg.Z0
-
-                S_cells = ABCD_to_S(
-                    np.linalg.inv(T_grid.reshape(Nf * Nc, N, N)), Z0, backend=self._backend
-                ).reshape(Nf, Nc, N, N)
-
+                S_cells = self.get_s_cells()
                 S_total = cascade_all(S_cells, backend=self._backend)
                 self._S_matrix = SMatrix(S_total, self._cfg.Z0)
 
@@ -118,7 +133,9 @@ class Simulation:
                 S_ph = self._S_matrix.array / (weights[:, None, :] / weights[:, :, None])
                 self._S_matrix = SMatrix(S_ph, self._cfg.Z0)
 
-        return self._S_matrix 
+            self._S_matrix_normalized = normalize
+
+        return self._S_matrix
 
     def plot_dispersion_relation(
         self,

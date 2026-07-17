@@ -18,6 +18,7 @@ from examples.discrete_vs_continuous import (
 )
 from examples.compare_gap_bandwidth import compare_gap_bandwidth
 from examples.compare_dispersion_relations import compare_dispersion_relations
+from examples.numerical_stability_checks import numerical_stability_checks
 from examples.utils import save_all
 
 
@@ -68,18 +69,20 @@ if __name__ == "__main__":
 
     # main()
 
-    # julia_comparison()
+    julia_comparison()
 
     # harmonics_comparison()
 
     # track_gap_center_over_pump_frequency()
 
-    continuous_vs_discrete_amplifier(backend="numba")
+    # continuous_vs_discrete_amplifier(backend="numpy")
     # continuous_vs_discrete_converter()
 
     # compare_gap_bandwidth()
 
     # compare_dispersion_relations()
+
+    # numerical_stability_checks()
 
 # linear in epsilon, kerr (no cross modulation, 3 wave mixing)
 # superimpose with center bandwidth

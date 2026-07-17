@@ -29,74 +29,81 @@ def julia_comparison():
         omega_cutoff=2 * 50 / 540e-3,  # L = 530 pH, C = 212 fF -> ~30 GHz
         omega_pump=6.8 * 2 * np.pi,
         omega_j=60 * 2 * np.pi,  # usually smaller
-        epsilon=0.04,  # 10% inductance modulation (|Φ_RF| = 0.01 Φ_0)
+        epsilon=0.2,  # 10% inductance modulation (|Φ_RF| = 0.01 Φ_0)
         omega_c=3.4
         * 2
         * np.pi,  # gap: well in the S parameter from signal to tranmission
         v_ratio=2.5,
-        freq_min=3.5,  # GHz
-        freq_max=6.1,  # GHz
-        n_freqs=500,
+        freq_min=2,  # GHz
+        freq_max=7,  # GHz
+        n_freqs=1000,
         disorder=False,
         nramp=0,
     )
-    central_band = 1
+    central_band = 0
     transmitted_band = central_band + len(cfg.ks_state) 
     log.info("omega_pump = %.3f GHz", cfg.omega_pump / (2 * np.pi))
 
-    sim = Simulation(JTLDiscrete, cfg)
-    sim.plot_s_parameters([(transmitted_band, central_band), (central_band, transmitted_band)], k=0, normalize=True)
+    # sim = Simulation(JTLDiscrete, cfg)
+    # sim.plot_s_parameters([(transmitted_band, central_band), (central_band, transmitted_band)], k=0, normalize=True)
 
-    # sim.plot_s_parameters([(i, central_band) for i in range(1, 2 * len(ks_state) + 1)])
-    # sim.plot_s_parameters([(i, transmitted_band) for i in range(1, 2 * len(ks_state) + 1)])
+    # # sim.plot_s_parameters([(i, central_band) for i in range(1, 2 * len(ks_state) + 1)])
+    # # sim.plot_s_parameters([(i, transmitted_band) for i in range(1, 2 * len(ks_state) + 1)])
 
-    log.info(f"f cutoff = {cfg.omega_cutoff / 2 / np.pi}")
+    # log.info(f"f cutoff = {cfg.omega_cutoff / 2 / np.pi}")
 
-    T_grid = sim._get_T_grid()
+    # T_grid = sim._get_T_grid()
 
-    _, _ = check_transfer_matrix_determinant(T_grid, tolerance=1e-18)
+    # _, _ = check_transfer_matrix_determinant(T_grid, tolerance=1e-18)
 
-    S_ph = sim.get_s_matrix(normalize=True).array
-    flux_check = check_photon_flux_conservation(
-        S_ph, cfg.omegas, cfg.omega_pump, cfg.ks_state
-    )
+    # S_ph = sim.get_s_matrix(normalize=True).array
+    # flux_check = check_photon_flux_conservation(
+    #     S_ph, cfg.omegas, cfg.omega_pump, cfg.ks_state
+    # )
 
-    fig, ax = plt.subplots()
-    ax.plot(cfg.freqs, flux_check[:, central_band-1], label="Input port 1 (signal)")
-    ax.axhline(1.0, color="k", lw=0.8, ls="--", label="ideal = 1")
-    ax.set_xlabel("Frequency (GHz)")
-    ax.set_ylabel(r"$\sum_i\,\eta_i\,|S_{ij}|^2$")
-    ax.set_title("Photon flux conservation")
-    ax.legend()
-    ax.grid(True, alpha=0.3)
+    # fig, ax = plt.subplots()
+    # ax.plot(cfg.freqs, flux_check[:, central_band-1], label="Input port 1 (signal)")
+    # ax.axhline(1.0, color="k", lw=0.8, ls="--", label="ideal = 1")
+    # ax.set_xlabel("Frequency (GHz)")
+    # ax.set_ylabel(r"$\sum_i\,\eta_i\,|S_{ij}|^2$")
+    # ax.set_title("Photon flux conservation")
+    # ax.legend()
+    # ax.grid(True, alpha=0.3)
 
     # symbolic_matrix, _ = sim.get_symbolic_matrix()
     # a = CellSingleMode()
     # a.export_matrix_graphic(symbolic_matrix)
 
     # save_all(prefix="julia_comp", fmt="svg")
-    # epsilon_max = 0.3
-    # epsilon_values = np.linspace(0.05, epsilon_max, 2)
-    # # cmap = plt.get_cmap("viridis")
+    epsilon_max = 0.2
+    epsilon_values = np.linspace(0.03, epsilon_max, 2)
+    # cmap = plt.get_cmap("viridis")
+    ncell_values = np.linspace(400, 1500, 2, dtype=int)
 
-    # fig, ax2 = plt.subplots()
-    # for i, eps in enumerate(epsilon_values):
-    #     if np.isclose(eps, cfg.epsilon):  # cfg.epsilon (0.25) already simulated as S_ph
-    #         S_ph_eps = S_ph
-    #     else:
-    #         cfg_eps = replace(cfg, epsilon=eps)
-    #         sim_eps = Simulation(JTLDiscrete, cfg_eps)
-    #         S_ph_eps = sim_eps.get_s_matrix(normalize=True).array
-    #     ax2.plot(
-    #         cfg.freqs,
-    #         (10*np.log10(np.abs(S_ph_eps) ** 2))[:, 3, 1],
-    #         label=f"e={eps:.2f}",
-    #     )
-    # ax2.set_xlabel("Frequency (GHz)")
-    # ax2.set_ylabel(r"$|S_{i," + str(central_band) + r"}|^2$ (dB)")
-    # ax2.set_title("Signal transmission vs. modulation depth")
-    # ax2.legend()
-    # ax2.grid(True, alpha=0.3)
+
+    fig, ax2 = plt.subplots()
+    for i, ncell_n in enumerate(epsilon_values):
+        cfg_eps = replace(cfg, epsilon=ncell_n)
+        sim_eps = Simulation(JTLDiscrete, cfg_eps, backend="numpy")
+        S_ph_eps = sim_eps.get_s_matrix(normalize=True).array
+
+        T_grid = sim_eps._get_T_grid()
+
+        _, _ = check_transfer_matrix_determinant(T_grid, tolerance=1e-18)
+        
+        # for i in range(2*len(ks_state)):
+        for i in [0, 1]:
+            ax2.plot(
+                cfg.freqs,
+                (10*np.log10(np.abs(S_ph_eps) ** 2))[:, i, 0],
+                label=f"S{i+1}1, e={ncell_n:.2f}",
+            )
+        
+    ax2.set_xlabel("Frequency (GHz)")
+    ax2.set_ylabel(r"$|S_{i," + str(central_band) + r"}|^2$ (dB)")
+    ax2.set_title("Signal transmission vs. modulation depth")
+    ax2.legend()
+    ax2.grid(True, alpha=0.3)
 
     plt.show()
 

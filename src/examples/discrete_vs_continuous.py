@@ -19,7 +19,7 @@ def _base_config(**overrides):
     cfg_kwargs = dict(
         Z0=50,
         M=1,
-        ks_state=[-3, -2, -1, 0],
+        ks_state=[-1, 0],
         ncell=321,
         cell_size=10e-6,
         omega_cutoff=2 * 50 / 540e-3,

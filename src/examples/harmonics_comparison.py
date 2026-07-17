@@ -19,16 +19,16 @@ def harmonics_comparison():
     ncell = 320
     freq_min = 1  # GHz
     freq_max = 12  # GHz
-    n_freqs = 1000
+    n_freqs = 200
     signal_freqs = np.linspace(freq_min, freq_max, n_freqs) * 2 * np.pi
 
     plt.figure()
 
-    db = np.zeros((2, len(signal_freqs)))
+    db = np.zeros((3, len(signal_freqs)))
     energy_checks = np.zeros((2, len(signal_freqs)))
 
     for index, (M, ks_state, (i, j)) in enumerate(
-        [(1, [0, 1], (2, 0)), (4, [-2, -1, 0, 1, 2], (7, 2))]
+        [(1, [-2, -1, 0, 1, 2], (7, 2)), (2, [-2, -1, 0, 1, 2], (7, 2)), (5, [-2, -1, 0, 1, 2], (7, 2))]
     ):
         cfg = SimulationConfig(
             Z0=50,
@@ -57,21 +57,23 @@ def harmonics_comparison():
 
         S_matrix = sim.get_s_matrix().array
         # _ = check_photon_conservation(S_matrix, cfg.omegas, cfg.omega_pump, cfg.ks_state)
-        energy_checks[index] = check_photon_flux_conservation(
-            S_matrix, cfg.omegas, cfg.omega_pump, cfg.ks_state
-        )[:, j]
+        # energy_checks[index] = check_photon_flux_conservation(
+        #     S_matrix, cfg.omegas, cfg.omega_pump, cfg.ks_state
+        # )[:, j]
 
         db[index] = 20.0 * np.log10(np.abs(S_matrix[:, i, j]))
 
     plt.figure()
-    plt.plot(signal_freqs / 2 / np.pi, db[0], label="M=1")
-    plt.plot(signal_freqs / 2 / np.pi, db[1], label="M=3")
+    # plt.plot(signal_freqs / 2 / np.pi, db[0], label="M=1")
+    plt.plot(signal_freqs / 2 / np.pi, db[1], label="M=2")
+    plt.plot(signal_freqs / 2 / np.pi, db[2], label="M=3")
     plt.legend()
 
-    plt.figure()
-    plt.plot(signal_freqs / 2 / np.pi, energy_checks[0], label="M=1")
-    plt.plot(signal_freqs / 2 / np.pi, energy_checks[1], label="M=3")
-    plt.legend()
+    # plt.figure()
+    # plt.plot(signal_freqs / 2 / np.pi, energy_checks[0], label="M=1")
+    # plt.plot(signal_freqs / 2 / np.pi, energy_checks[1], label="M=2")
+    # plt.plot(signal_freqs / 2 / np.pi, energy_checks[2], label="M=3")
+    # plt.legend()
 
     print(np.abs(db[1] - db[0]).sum())
     print(np.abs(energy_checks[1] - energy_checks[0]).sum())
