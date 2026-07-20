@@ -77,7 +77,8 @@ def julia_comparison():
     # save_all(prefix="julia_comp", fmt="svg")
     epsilon_max = 0.2
     epsilon_values = np.linspace(0.03, epsilon_max, 2)
-    # cmap = plt.get_cmap("viridis")
+    colors = ["blue", "red"]
+    linestyles = ["-", "--"]
     ncell_values = np.linspace(400, 1500, 2, dtype=int)
 
 
@@ -90,15 +91,17 @@ def julia_comparison():
         T_grid = sim_eps._get_T_grid()
 
         _, _ = check_transfer_matrix_determinant(T_grid, tolerance=1e-18)
-        
+
         # for i in range(2*len(ks_state)):
-        for i in [0, 1]:
+        for j in [0, 1]:
             ax2.plot(
                 cfg.freqs,
-                (10*np.log10(np.abs(S_ph_eps) ** 2))[:, i, 0],
-                label=f"S{i+1}1, e={ncell_n:.2f}",
+                (10*np.log10(np.abs(S_ph_eps) ** 2))[:, j, 0],
+                label=f"S{j+1}1, e={ncell_n:.2f}",
+                color=colors[i],
+                linestyle=linestyles[j % len(linestyles)],
             )
-        
+
     ax2.set_xlabel("Frequency (GHz)")
     ax2.set_ylabel(r"$|S_{i," + str(central_band) + r"}|^2$ (dB)")
     ax2.set_title("Signal transmission vs. modulation depth")
