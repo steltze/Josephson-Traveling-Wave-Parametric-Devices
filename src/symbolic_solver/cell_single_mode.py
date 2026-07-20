@@ -76,8 +76,8 @@ class CellSingleMode:
         impedance = self.Zs0(self.xi)
         for mi, (Zm_p, Zm_m) in enumerate(zip(Zs_m_p, Zs_m_m), start=1):
             impedance += Zm_p(self.xi) * self._fourier_basis(mi) * exp(
-                I * mi * self.theta
-            ) + Zm_m(self.xi) * self._fourier_basis(-mi) * exp(-I * mi * self.theta)
+                -I * mi * self.theta
+            ) + Zm_m(self.xi) * self._fourier_basis(-mi) * exp(I * mi * self.theta)
         return impedance
 
     def _build_Yg_shunt(
@@ -94,9 +94,9 @@ class CellSingleMode:
         admittance = self.Yg0(self.omega[self.k])
         for mi, (Ym_p, Ym_m) in enumerate(zip(Yg_m_p, Yg_m_m), start=1):
             admittance += Ym_p(self.omega[self.k - mi]) * self._fourier_basis(mi) * exp(
-                I * mi * self.theta
-            ) + Ym_m(self.omega[self.k + mi]) * self._fourier_basis(-mi) * exp(
                 -I * mi * self.theta
+            ) + Ym_m(self.omega[self.k + mi]) * self._fourier_basis(-mi) * exp(
+                I * mi * self.theta
             )
         return admittance
 

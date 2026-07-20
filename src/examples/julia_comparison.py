@@ -33,15 +33,15 @@ def julia_comparison():
         omega_c=3.4
         * 2
         * np.pi,  # gap: well in the S parameter from signal to tranmission
-        v_ratio=-1.0,
+        v_ratio=1.0, # > 0 => co-propagating, < 0 => counter-propagating
         freq_min=1,  # GHz
         freq_max=14,  # GHz
         n_freqs=1000,
         disorder=False,
         nramp=0,
     )
-    central_band = 0
-    transmitted_band = central_band + len(cfg.ks_state) 
+    central_band = 2
+    transmitted_band = 4 # central_band + len(cfg.ks_state) 
     log.info("omega_pump = %.3f GHz", cfg.omega_pump / (2 * np.pi))
 
     sim = Simulation(JTLDiscrete, cfg)
