@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 
 from models.cell import CellImmitance
-from models.helpers import band_coupling
+from models.electrical_elements import VariableInductor, Capacitor, Parallel
 
 
 class JTLDiscrete:
@@ -110,27 +110,15 @@ class JTLDiscrete:
                 n = len(config.ks_state)
                 Zs_harm_arr = np.zeros((Nf, n, n), dtype=complex)
                 if not first:
-                    # Build modulated L matrix in sideband space: I + eps*B1 + eps^2*B2 + ...
-                    L_mat = np.eye(n)
-                    for p in range(1, M + 1):
-                        L_mat += (_eps ** p) * band_coupling(n, p)
                     # Sideband frequencies for each signal freq: (Nf, n)
                     omega_sb = w_s[:, None] + np.array(config.ks_state)[None, :] * w_p
-                    # (Nf, n, n) diagonal Omega matrices
-                    Omega = np.zeros((Nf, n, n), dtype=float)
-                    for _k in range(n):
-                        Omega[:, _k, _k] = omega_sb[:, _k]
                     # Exact parallel-LC series impedance: JJ inductor || self-capacitance
                     Ccap_val = 1.0 / (_wj**2 * _L)
-                    Yex = np.linalg.inv(1j * (Omega @ (_L * L_mat))) + 1j * Omega * Ccap_val
-                    Zex = np.linalg.inv(Yex)  # (Nf, n, n)
-                    # Subtract zero-order diagonal: Zs0[f,k] = j*omega_sb*L/(1-omega_sb^2/wj^2)
-                    Zex_harm = Zex.copy()
-                    # Zex_harm[:, np.arange(n), np.arange(n)] -= (
-                    #     1j * omega_sb * _L / (1.0 - omega_sb**2 / _wj**2)
-                    # )
-                    # Full coupling matrix: Zs_harm_arr[f, target, source]
-                    Zs_harm_arr = Zex_harm
+                    Zs_element = Parallel(
+                        VariableInductor(L0=_L, eps=_eps, order=M),
+                        Capacitor(Ccap_val),
+                    )
+                    Zs_harm_arr = Zs_element.impedance(omega_sb)  # (Nf, n, n)
                 Yg_harm_arr = np.zeros((M, Nf), dtype=complex)
 
                 cells.append(

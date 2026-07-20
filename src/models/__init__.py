@@ -7,6 +7,14 @@ from .jtl_continuous import (
     dispersion_bloch,
     dispersion_bloch_with_plasma,
 )
+from .electrical_elements import (
+    Component,
+    Inductor,
+    Capacitor,
+    VariableInductor,
+    InSeries,
+    Parallel,
+)
 
 __all__ = [
     "CellImmitance",
@@ -16,4 +24,10 @@ __all__ = [
     "dispersion_linear_with_plasma",
     "dispersion_bloch",
     "dispersion_bloch_with_plasma",
+    "Component",
+    "Inductor",
+    "Capacitor",
+    "VariableInductor",
+    "InSeries",
+    "Parallel",
 ]

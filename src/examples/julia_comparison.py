@@ -17,7 +17,7 @@ log = get_logger(__name__)
 
 
 def julia_comparison():
-    ks_state = [0, 1]
+    ks_state = [-1, 0]
     M = 1
     ncell = 320+1
     cfg = SimulationConfig(
@@ -27,15 +27,15 @@ def julia_comparison():
         ncell=ncell,
         cell_size=10e-6,
         omega_cutoff=2 * 50 / 540e-3,  # L = 530 pH, C = 212 fF -> ~30 GHz
-        omega_pump=6.8 * 2 * np.pi,
+        omega_pump=13.31 * 2 * np.pi,
         omega_j=60 * 2 * np.pi,  # usually smaller
-        epsilon=0.2,  # 10% inductance modulation (|Φ_RF| = 0.01 Φ_0)
+        epsilon=0.045,  # 10% inductance modulation (|Φ_RF| = 0.01 Φ_0)
         omega_c=3.4
         * 2
         * np.pi,  # gap: well in the S parameter from signal to tranmission
-        v_ratio=2.5,
-        freq_min=2,  # GHz
-        freq_max=7,  # GHz
+        v_ratio=-1.0,
+        freq_min=1,  # GHz
+        freq_max=14,  # GHz
         n_freqs=1000,
         disorder=False,
         nramp=0,
@@ -44,8 +44,8 @@ def julia_comparison():
     transmitted_band = central_band + len(cfg.ks_state) 
     log.info("omega_pump = %.3f GHz", cfg.omega_pump / (2 * np.pi))
 
-    # sim = Simulation(JTLDiscrete, cfg)
-    # sim.plot_s_parameters([(transmitted_band, central_band), (central_band, transmitted_band)], k=0, normalize=True)
+    sim = Simulation(JTLDiscrete, cfg)
+    sim.plot_s_parameters([(transmitted_band, central_band), (central_band, transmitted_band)], k=0, normalize=True)
 
     # # sim.plot_s_parameters([(i, central_band) for i in range(1, 2 * len(ks_state) + 1)])
     # # sim.plot_s_parameters([(i, transmitted_band) for i in range(1, 2 * len(ks_state) + 1)])
