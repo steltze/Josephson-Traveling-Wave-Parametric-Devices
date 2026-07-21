@@ -52,8 +52,8 @@ class CellSingleMode:
         """
         Return four lists of SymPy Function objects for orders 1..M.
 
-        _p suffix: the exp(+I*mi*theta) term (lower-sideband source, k-mi → k).
-        _m suffix: the exp(-I*mi*theta) term (upper-sideband source, k+mi → k).
+        _p suffix: the exp(-I*mi*theta) term (lower-sideband source, k-mi → k).
+        _m suffix: the exp(+I*mi*theta) term (upper-sideband source, k+mi → k).
         """
         Zs_m_p = [Function(f"Zs{m}p") for m in range(1, M + 1)]
         Zs_m_m = [Function(f"Zs{m}m") for m in range(1, M + 1)]
@@ -69,8 +69,8 @@ class CellSingleMode:
         """
         Return the symbolic Zs(t) Fourier series up to order M.
 
-        Zs_m_p[i-1] is applied to xi in the exp(+I*i*theta) term (lower source).
-        Zs_m_m[i-1] is applied to xi in the exp(-I*i*theta) term (upper source).
+        Zs_m_p[i-1] is applied to xi in the exp(-I*i*theta) term (lower source).
+        Zs_m_m[i-1] is applied to xi in the exp(+I*i*theta) term (upper source).
         xi is substituted with omega[k-m] during harmonic extraction.
         """
         impedance = self.Zs0(self.xi)
@@ -88,8 +88,8 @@ class CellSingleMode:
         """
         Return the symbolic Yg(t) Fourier series up to order M.
 
-        Yg_m_p[i-1] carries omega[k-i] in the exp(+I*i*theta) term (lower source).
-        Yg_m_m[i-1] carries omega[k+i] in the exp(-I*i*theta) term (upper source).
+        Yg_m_p[i-1] carries omega[k-i] in the exp(-I*i*theta) term (lower source).
+        Yg_m_m[i-1] carries omega[k+i] in the exp(+I*i*theta) term (upper source).
         """
         admittance = self.Yg0(self.omega[self.k])
         for mi, (Ym_p, Ym_m) in enumerate(zip(Yg_m_p, Yg_m_m), start=1):

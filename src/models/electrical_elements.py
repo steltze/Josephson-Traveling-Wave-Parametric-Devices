@@ -2,7 +2,20 @@ from __future__ import annotations
 
 import numpy as np
 
-from models.helpers import band_coupling
+
+def band_coupling(n: int, offset: int) -> np.ndarray:
+    """n x n symmetric matrix with 1s on the +/- `offset` diagonals.
+
+    offset=1 -> nearest-neighbour band coupling (the B1 in L0(1+eps B1+...)).
+    offset=2 -> second-neighbour coupling (the eps^2 'C' matrix), etc.
+    """
+    M = np.zeros((n, n))
+    if abs(offset) >= n or offset == 0:
+        return M
+    idx = np.arange(n - abs(offset))
+    M[idx, idx + abs(offset)] = 1.0
+    M[idx + abs(offset), idx] = 1.0
+    return M
 
 
 def _is_matrix(value: np.ndarray) -> bool:
@@ -23,7 +36,7 @@ def _diag_promote(value: np.ndarray) -> np.ndarray:
     """(..., n) -> (..., n, n) with `value`'s entries placed on the
     diagonal. Used to lift a plain component's per-sideband values (one
     impedance per sideband frequency) into the same matrix shape as a
-    sibling VariableInductor, so they can be summed."""
+    sibling ModulatedInductor, so they can be summed."""
     n = value.shape[-1]
     out = np.zeros(value.shape + (n,), dtype=complex)
     idx = np.arange(n)
@@ -79,7 +92,7 @@ class Capacitor(Component):
         return 1.0 / (1j * np.asarray(omega) * self.C)
 
 
-class VariableInductor(Component):
+class ModulatedInductor(Component):
     """
     Pump-modulated (Josephson) inductor.
 

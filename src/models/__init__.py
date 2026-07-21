@@ -11,7 +11,7 @@ from .electrical_elements import (
     Component,
     Inductor,
     Capacitor,
-    VariableInductor,
+    ModulatedInductor,
     InSeries,
     Parallel,
 )
@@ -27,7 +27,7 @@ __all__ = [
     "Component",
     "Inductor",
     "Capacitor",
-    "VariableInductor",
+    "ModulatedInductor",
     "InSeries",
     "Parallel",
 ]

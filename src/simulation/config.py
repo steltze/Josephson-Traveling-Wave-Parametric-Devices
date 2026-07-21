@@ -96,12 +96,12 @@ class SimulationConfig:
             if ratio > 0.5:
                 log.warning(
                     "Max sideband frequency %.1f GHz is %.0f%% of ω_j = %.1f GHz. "
-                    "The plasma resonance coupling factor 1/(1-ω²/ω_j²)² will be "
+                    "The plasma resonance coupling factor 1/(1-ω²/ω_j²) will be "
                     "%.1fx — consider increasing ω_j or reducing freq_max or ω_pump.",
                     max_sideband_GHz,
                     ratio * 100,
                     self.omega_j / (2 * np.pi),
-                    1 / (1 - ratio**2) ** 2,
+                    1 / (1 - ratio**2),
                 )
 
         if self.M > 1 and self.ks_state:
