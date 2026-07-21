@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+from functools import reduce
 import numpy as np
 
 
@@ -145,3 +145,161 @@ class Parallel(Component):
 
     def admittance(self, omega):
         return _sum_immittances([c.admittance(omega) for c in self.components])
+
+
+def _kron_list(mats):
+    """Kronecker product of a list of matrices, left to right."""
+    return reduce(np.kron, mats)
+
+
+class ModulatedInductorMultiPump(Component):
+    """
+    Josephson inductor modulated by P independent pump tones.
+
+    Each pump j couples its own sideband index k_j through a band-coupling
+    matrix in the j-th tensor slot. The full sideband space is the tensor
+    product of the per-pump sideband ladders, of dimension
+
+        D = prod_j n_j,   n_j = 2*Kmax_j + 1
+
+    The inductance to first order in each modulation depth is
+
+        L / L0 = I_D
+               + sum_j  eps_j * ( I_1 (x) ... (x) B1_j (x) ... (x) I_P )
+               + (higher single-pump harmonics if `order` > 1)
+
+    Only single-pump hops appear here. A single interaction
+    is one hop in one index -- the modulation is a *sum* of cosines, never a
+    product -- so there is NO eps_i*eps_j "diagonal" cross term inserted by
+    hand. Two-index transitions (combination idlers omega_s + sum_j k_j w_pj)
+    emerge from cascading many cells, i.e. from products of these single-hop
+    operators, not from this per-cell matrix.
+
+    Parameters
+    ----------
+    L0 : float
+        Bare inductance L_J.
+    eps : sequence of P floats
+        Modulation depth per pump.
+    n_sidebands : sequence of P ints
+        Per-pump ladder size n_j = 2*Kmax_j + 1 (must be odd if the ladder is
+        centred on the signal; any n_j works for the matrix machinery).
+    order : int
+        Highest single-pump harmonic to include (1 -> B1 only, 2 -> +B2, ...).
+    coeffs : dict or sequence of dicts, optional
+        Expansion coefficients {p: a_p}. A single dict applies to every pump;
+        a list gives per-pump coefficients. Defaults to {p: 1.0}.
+    """
+
+    def __init__(self, L0, eps, n_sidebands, order=1, coeffs=None):
+        self.L0 = L0
+        self.eps = list(eps)
+        self.n_sidebands = list(n_sidebands)
+        self.P = len(self.eps)
+        if len(self.n_sidebands) != self.P:
+            raise ValueError("eps and n_sidebands must have the same length P")
+
+        # normalise coeffs -> one dict per pump
+        if coeffs is None:
+            base = {p: 1.0 for p in range(1, order + 1)}
+            self.coeffs = [dict(base) for _ in range(self.P)]
+        elif isinstance(coeffs, dict):
+            self.coeffs = [dict(coeffs) for _ in range(self.P)]
+        else:
+            if len(coeffs) != self.P:
+                raise ValueError("per-pump coeffs list must have length P")
+            self.coeffs = [dict(c) for c in coeffs]
+
+        self.order = order
+        self.D = int(np.prod(self.n_sidebands))
+
+    def _build_L_over_L0(self) -> np.ndarray:
+        """Assemble the (D, D) coupling matrix  L / L0."""
+        dims = self.n_sidebands
+        Is = [np.eye(d, dtype=complex) for d in dims]
+
+        L = np.eye(self.D, dtype=complex)  # identity term
+
+        for j in range(self.P):
+            for p, a in self.coeffs[j].items():
+                mats = list(Is)                       # identities in every slot
+                mats[j] = band_coupling(dims[j], p).astype(complex)  # hop in slot j
+                L = L + (self.eps[j] ** p) * a * _kron_list(mats)
+
+        return L
+
+    def impedance(self, omega):
+        """
+        omega : per-sideband frequency grid on the FULL tensor lattice.
+            shape (D,) for one signal frequency, or (Nf, D) batched over Nf.
+            Entry at flat index m must be  omega_s + sum_j k_j * omega_pj  for
+            the (k_1,...,k_P) tuple that flat index m corresponds to (kron order,
+            first pump = slowest-varying index).
+        """
+        omega = np.atleast_2d(np.asarray(omega, dtype=float))  # (Nf, D)
+        Nf, D = omega.shape
+        if D != self.D:
+            raise ValueError(
+                f"omega trailing dim {D} != tensor sideband dim {self.D} "
+                f"(n_sidebands={self.n_sidebands})"
+            )
+
+        Omega = np.zeros((Nf, D, D), dtype=complex)
+        idx = np.arange(D)
+        Omega[:, idx, idx] = omega
+
+        L = self._build_L_over_L0()                 # (D, D)
+        Z = 1j * Omega @ (self.L0 * L)              # (Nf, D, D)
+        return Z[0] if Z.shape[0] == 1 else Z
+
+
+def multipump_frequency_grid(omega_s, omega_p, Kmax):
+    """
+    Build the per-sideband frequency vector on the tensor lattice, in the
+    same kron flattening order the coupling matrix uses (first pump = outer).
+
+    Returns
+    -------
+    omega_grid : (D,) array of  omega_s + sum_j k_j * omega_pj
+    labels     : list of (k_1,...,k_P) tuples in matching order
+    """
+    from itertools import product
+    ranges = [range(-K, K + 1) for K in Kmax]
+    labels = list(product(*ranges))
+    omega_p = np.asarray(omega_p, dtype=float)
+    omega_grid = np.array(
+        [omega_s + sum(k * w for k, w in zip(tup, omega_p)) for tup in labels],
+        dtype=float,
+    )
+    return omega_grid, labels
+
+
+if __name__ == "__main__":
+    np.set_printoptions(precision=3, suppress=True, linewidth=160)
+
+    # two pumps, Kmax = 1 each -> n_j = 3, D = 9
+    omega_s = 6.0
+    omega_p = [12.0, 7.0]
+    eps = [0.05, 0.03]
+    Kmax = [1, 1]
+    n_sb = [2 * K + 1 for K in Kmax]
+
+    comp = ModulatedInductorMultiPump(L0=1.0, eps=eps, n_sidebands=n_sb, order=1)
+    Lrel = comp._build_L_over_L0()
+    print("L / L0  (single hops only, no eps1*eps2 cross term):")
+    print(Lrel.real)
+
+    grid, labels = multipump_frequency_grid(omega_s, omega_p, Kmax)
+    print("\n(k1,k2) -> omega:")
+    for lab, w in zip(labels, grid):
+        print(f"   {lab} -> {w:6.2f}")
+
+    Z = comp.impedance(grid)
+    print("\nimpedance shape:", Z.shape)
+
+    # confirm: (0,0)->(1,1) entry is ZERO (no single-cell double hop)
+    lut = {lab: i for i, lab in enumerate(labels)}
+    print("\n(0,0)->(1,0) coupling in L/L0 =", Lrel[lut[(0, 0)], lut[(1, 0)]].real, "(eps1)")
+    print("(0,0)->(0,1) coupling in L/L0 =", Lrel[lut[(0, 0)], lut[(0, 1)]].real, "(eps2)")
+    print("(0,0)->(1,1) coupling in L/L0 =", Lrel[lut[(0, 0)], lut[(1, 1)]].real,
+          "(must be 0: not a single hop)")
