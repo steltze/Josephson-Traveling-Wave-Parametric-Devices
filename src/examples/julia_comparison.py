@@ -17,7 +17,7 @@ log = get_logger(__name__)
 
 
 def julia_comparison():
-    ks_state = [-1, 0]
+    ks_state = [0, 1]
     M = 1
     ncell = 320+1
     cfg = SimulationConfig(
@@ -27,21 +27,21 @@ def julia_comparison():
         ncell=ncell,
         cell_size=10e-6,
         omega_cutoff=2 * 50 / 540e-3,  # L = 530 pH, C = 212 fF -> ~30 GHz
-        omega_pump=13.31 * 2 * np.pi,
-        omega_j=60 * 2 * np.pi,  # usually smaller
+        omega_pump=6.8 * 2 * np.pi,
+        omega_j=30 * 2 * np.pi,  # usually smaller
         epsilon=0.045,  # 10% inductance modulation (|Φ_RF| = 0.01 Φ_0)
         omega_c=3.4
         * 2
         * np.pi,  # gap: well in the S parameter from signal to tranmission
-        v_ratio=1.0, # > 0 => co-propagating, < 0 => counter-propagating
+        v_ratio=-2.5, # > 0 => co-propagating, < 0 => counter-propagating
         freq_min=1,  # GHz
         freq_max=14,  # GHz
         n_freqs=1000,
         disorder=False,
         nramp=0,
     )
-    central_band = 2
-    transmitted_band = 4 # central_band + len(cfg.ks_state) 
+    central_band = 1
+    transmitted_band = 3 # central_band + len(cfg.ks_state) 
     log.info("omega_pump = %.3f GHz", cfg.omega_pump / (2 * np.pi))
 
     sim = Simulation(JTLDiscrete, cfg)

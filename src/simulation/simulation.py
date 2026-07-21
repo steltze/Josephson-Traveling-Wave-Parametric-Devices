@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 
 from backends import Backend
 from symbolic_solver.cell_single_mode import CellSingleMode
+from symbolic_solver.cell_single_mode_symmetric import CellSingleModeSymmetric
 from numerical_solver.s_matrix import SMatrix, ABCD_to_S, cascade_all
 from analysis.dispersion_relation import bloch_wavenumbers
 from analysis.s_parameters import plot_s_parameters as _plot_s_params
@@ -30,6 +31,10 @@ class Simulation:
         Numerical backend for the ABCD-to-S conversion and Redheffer-star
         cascade (see `backends.available_backends()`). Defaults to "numpy",
         or the $TWPA_BACKEND environment variable if set.
+    cell_topology : "L" or "pi"
+        Unit-cell transfer-matrix topology. "L" (default) is the plain
+        series-then-shunt cell (`CellSingleMode`). "pi" is the symmetric
+        Pi (shunt/2-series-shunt/2) cell (`CellSingleModeSymmetric`).
 
     Examples
     --------
@@ -41,13 +46,30 @@ class Simulation:
     >>> plt.show()
 
     >>> sim = Simulation(JTL, cfg, backend="numba")  # JIT + multi-threaded cascade
+    >>> sim = Simulation(JTL, cfg, cell_topology="pi")  # symmetric Pi cell
     """
 
-    def __init__(self, cell_cls, config, backend: Backend | str | None = None) -> None:
+    _CELL_MODELS = {"L": CellSingleMode, "pi": CellSingleModeSymmetric}
+
+    def __init__(
+        self,
+        cell_cls,
+        config,
+        backend: Backend | str | None = None,
+        cell_topology: str = "L",
+    ) -> None:
         self._cell_cls = cell_cls
         self._cfg = config
         self._backend = backend
-        self._model = CellSingleMode()
+        try:
+            model_cls = self._CELL_MODELS[cell_topology]
+        except KeyError:
+            raise ValueError(
+                f"Unknown cell_topology {cell_topology!r}; "
+                f"expected one of {sorted(self._CELL_MODELS)}"
+            ) from None
+        self._model = model_cls()
+        self._cell_topology = cell_topology
 
         self._T_sym = None
         self._state_syms = None
@@ -213,7 +235,7 @@ class Simulation:
         """Evaluate T_sym on the full (Nf, Nc) grid; cached after first call."""
         if self._T_grid is None:
             T_sym, _ = self.get_symbolic_matrix()
-            cells = self._cell_cls.build(self._cfg)
+            cells = self._cell_cls.build(self._cfg, cell_topology=self._cell_topology)
             dim = len(self._state_syms)
             with _timer("Numerical cell matrices"):
                 self._T_grid = self._model.build_cell_freq_matrices(
