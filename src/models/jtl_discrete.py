@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 
 from models.cell import CellImmitance
-from models.electrical_elements import ModulatedInductor, Capacitor, Parallel
+from models.electrical_elements import Component, ModulatedInductor, Capacitor
 
 
 class JTLDiscrete:
@@ -101,7 +101,7 @@ class JTLDiscrete:
                 omega_sb = w_s[:, None] + np.array(ks_coupling)[None, :] * w_p
                 # Exact parallel-LC series impedance: JJ inductor || self-capacitance
                 Ccap_val = 1.0 / (_wj**2 * _L)
-                Zs_element = Parallel(
+                Zs_element = Component.parallel(
                     ModulatedInductor(L0=_L, eps=_eps, order=M),
                     Capacitor(Ccap_val),
                 )

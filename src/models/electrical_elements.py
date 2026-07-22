@@ -75,6 +75,14 @@ class Component:
     def admittance(self, omega):
         return _invert(self.impedance(omega))
 
+    @staticmethod
+    def series(*components: "Component") -> "Component":
+        return _Combination(components, "series")
+
+    @staticmethod
+    def parallel(*components: "Component") -> "Component":
+        return _Combination(components, "parallel")
+
 
 class Inductor(Component):
     def __init__(self, L: float):
@@ -131,20 +139,22 @@ class ModulatedInductor(Component):
         return Z[0] if Z.shape[0] == 1 else Z
 
 
-class InSeries(Component):
-    def __init__(self, *components: Component):
+class _Combination(Component):
+    """Backing implementation for Component.series / Component.parallel."""
+
+    def __init__(self, components: tuple[Component, ...], mode: str):
         self.components = components
+        self.mode = mode
 
     def impedance(self, omega):
-        return _sum_immittances([c.impedance(omega) for c in self.components])
-
-
-class Parallel(Component):
-    def __init__(self, *components: Component):
-        self.components = components
+        if self.mode == "series":
+            return _sum_immittances([c.impedance(omega) for c in self.components])
+        return super().impedance(omega)
 
     def admittance(self, omega):
-        return _sum_immittances([c.admittance(omega) for c in self.components])
+        if self.mode == "parallel":
+            return _sum_immittances([c.admittance(omega) for c in self.components])
+        return super().admittance(omega)
 
 
 def _kron_list(mats):

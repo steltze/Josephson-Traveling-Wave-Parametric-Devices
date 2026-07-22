@@ -12,8 +12,6 @@ from .electrical_elements import (
     Inductor,
     Capacitor,
     ModulatedInductor,
-    InSeries,
-    Parallel,
 )
 
 __all__ = [
@@ -28,6 +26,4 @@ __all__ = [
     "Inductor",
     "Capacitor",
     "ModulatedInductor",
-    "InSeries",
-    "Parallel",
 ]
