@@ -145,8 +145,8 @@ class CellSingleModeSymmetric:
             cv, ci are the symbolic coefficient expressions in terms of V[k, n]
             and I[k, n] after the sideband shift k -> k - m.
         """
-        Vn_1 = self.V[self.k, self.n] - Zs_t * (self.Ic[self.k, self.n] - (Yg_t / 2) * self.V[self.k, self.n])
-        In_1 = self.Ic[self.k, self.n] - (Yg_t / 2) * self.V[self.k, self.n] - (Yg_t / 2) * Vn_1
+        Vn_1 = (1 + Yg_t_xi * Zs_t / 2.0) * self.V[self.k, self.n] - Zs_t * self.Ic[self.k, self.n]
+        In_1 = self.Ic[self.k, self.n] - (Yg_t / 2.0) * self.V[self.k, self.n] - (Yg_t / 2.0) * Vn_1
 
         Vn_1_expanded = expand(Vn_1)
         In_1_expanded = expand(In_1)

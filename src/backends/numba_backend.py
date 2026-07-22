@@ -30,7 +30,7 @@ def _abcd_to_s_single(abcd: np.ndarray, z0: np.ndarray) -> np.ndarray:
 
     Z = np.empty((N, N), dtype=np.complex128)
     Z[:k, :k] = A @ Cinv
-    Z[:k, k:] = (A @ D - B @ C) @ Cinv
+    Z[:k, k:] = A @ Cinv @ D - B  # block form; A@Cinv@D != (A@D)@Cinv unless C,D commute
     Z[k:, :k] = Cinv
     Z[k:, k:] = CinvD
 

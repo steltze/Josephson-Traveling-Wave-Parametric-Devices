@@ -73,17 +73,7 @@ class JTLDiscrete:
         M = config.M
         w_s = np.asarray(config.omegas)   # (Nf,)
         Nf = len(w_s)
-
-        # The Pi cell's shunt-series-shunt chain references Zs harmonics up to
-        # M sidebands beyond ks_state (see CellSingleModeSymmetric), unlike the
-        # L cell's series-then-shunt chain, which never needs sidebands outside
-        # ks_state. So the coupling matrix must cover that wider, still-
-        # contiguous range for "pi" (build_cell_freq_matrices infers the extra
-        # margin from how much wider this array is than ks_state).
-        margin = M if cell_topology == "pi" else 0
-        ks_coupling = list(
-            range(min(config.ks_state) - margin, max(config.ks_state) + margin + 1)
-        )
+        n = len(config.ks_state)
 
         cells = []
         for i in range(ncell):
@@ -94,18 +84,18 @@ class JTLDiscrete:
             _L, _wj, _eps, _th = L[i], wj[i], epsilons[i], thetas[i]
             _C = C_end
 
-            n = len(ks_coupling)
+            
             Zs_harm_arr = np.zeros((Nf, n, n), dtype=complex)
             if not first:
                 # Sideband frequencies for each signal freq: (Nf, n)
-                omega_sb = w_s[:, None] + np.array(ks_coupling)[None, :] * w_p
+                omega_sb = w_s[:, None] + np.array(config.ks_state)[None, :] * w_p
                 # Exact parallel-LC series impedance: JJ inductor || self-capacitance
                 Ccap_val = 1.0 / (_wj**2 * _L)
-                Zs_element = Component.parallel(
+                squid = Component.parallel(
                     ModulatedInductor(L0=_L, eps=_eps, order=M),
                     Capacitor(Ccap_val),
                 )
-                Zs_harm_arr = Zs_element.impedance(omega_sb)  # (Nf, n, n)
+                Zs_harm_arr = squid.impedance(omega_sb)  # (Nf, n, n)
             Yg_harm_arr = np.zeros((M, Nf), dtype=complex)
 
             cells.append(

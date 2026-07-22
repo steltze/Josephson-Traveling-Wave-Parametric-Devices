@@ -26,7 +26,7 @@ class NumpyBackend(Backend):
 
         Z = np.empty((Nf, N, N), dtype=complex)
         Z[:, :k, :k] = A @ Cinv
-        Z[:, :k, k:] = (A @ D - B @ C) @ Cinv  # = (AD - BC) C^{-1}
+        Z[:, :k, k:] = A @ Cinv @ D - B  # block form; A@Cinv@D != (A@D)@Cinv unless C,D commute
         Z[:, k:, :k] = Cinv
         Z[:, k:, k:] = CinvD
 

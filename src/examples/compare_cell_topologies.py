@@ -39,7 +39,7 @@ def compare_cell_topologies():
         omega_cutoff=2 * 50 / 540e-3,  # L = 530 pH, C = 212 fF -> ~30 GHz
         omega_pump=6.8 * 2 * np.pi,
         omega_j=60 * 2 * np.pi,
-        epsilon=0.0,
+        epsilon=0.045,
         omega_c=3.4 * 2 * np.pi,
         v_ratio=-2.5,
         freq_min=1,
@@ -60,9 +60,9 @@ def compare_cell_topologies():
         check_transfer_matrix_determinant(T_grid, tolerance=1e-8)
         sims[topology] = sim
 
-    symbolic_matrix, state_syms = sim.get_symbolic_matrix()
-    a = CellSingleModeSymmetric()
-    a.export_matrix_graphic(symbolic_matrix, state_syms)
+    # symbolic_matrix, state_syms = sim.get_symbolic_matrix()
+    # a = CellSingleModeSymmetric()
+    # a.export_matrix_graphic(symbolic_matrix, state_syms)
 
     fig, (ax_gain, ax_idler) = plt.subplots(1, 2, figsize=(12, 5))
     for topology, color in (("L", "C0"), ("pi", "C1")):
@@ -85,9 +85,9 @@ def compare_cell_topologies():
 
     # --- dispersion relation on a single interior cell ---
     fig2, ax = plt.subplots(figsize=(7, 5))
-    for topology, color in (("L", "C0"), ("pi", "C1")):
+    for topology, color, index in (("L", "C0", 2), ("pi", "C1", 1)):
         T_grid = sims[topology]._get_T_grid()
-        T_cell = T_grid[:, cfgs[topology].ncell // 2]  # (Nf, dim, dim)
+        T_cell = T_grid[:, index]  # (Nf, dim, dim)
         _, k = bloch_wavenumbers(T_cell)
         for branch in range(k.shape[1]):
             ax.plot(

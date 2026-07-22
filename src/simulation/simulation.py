@@ -125,7 +125,7 @@ class Simulation:
             ).reshape(Nf, Nc, N, N)
         return self._S_cells
 
-    def get_s_matrix(self, normalize: bool = False) -> SMatrix:
+    def get_s_matrix(self, normalize: bool = True) -> SMatrix:
         """
         Return the cascaded S-matrix.
 
