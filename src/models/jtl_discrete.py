@@ -32,9 +32,15 @@ class JTLDiscrete:
         -------
         list[CellImmitance], length config.ncell
         """
-
+            
         ncell = config.ncell
-        ns = np.arange(ncell)
+
+        if cell_topology == "L":
+            ns = np.zeros(ncell)
+            ns[1:] = np.arange(ncell-1)
+        else:
+            ns = np.arange(ncell)
+
         a = config.cell_size
 
         ZR = config.Z0 * np.ones(ncell)

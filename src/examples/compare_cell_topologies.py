@@ -64,13 +64,14 @@ def compare_cell_topologies():
     # a = CellSingleModeSymmetric()
     # a.export_matrix_graphic(symbolic_matrix, state_syms)
 
-    fig, (ax_gain, ax_idler) = plt.subplots(1, 2, figsize=(12, 5))
+    fig, (ax_gain, ax_idler, ax_err) = plt.subplots(1, 3, figsize=(17, 5))
+    s_params = {}
     for topology, color in (("L", "C0"), ("pi", "C1")):
         S = sims[topology].get_s_matrix().array  # (Nf, N, N)
-        print(np.abs(S[10]))
 
         s11 = S[:, signal_port, signal_port]
         s31 = S[:, 2, signal_port]
+        s_params[topology] = (s11, s31)
         ax_gain.plot(base_cfg.freqs, 20 * np.log10(np.abs(s11)), color=color, label=topology)
         ax_idler.plot(base_cfg.freqs, 20 * np.log10(np.abs(s31)), color=color, label=topology)
     ax_gain.set_title("Signal reflection |S11|")
@@ -80,6 +81,17 @@ def compare_cell_topologies():
         ax.set_ylabel("Magnitude (dB)")
         ax.legend()
         ax.grid(True, alpha=0.3)
+
+    s11_err = np.abs(s_params["L"][0] - s_params["pi"][0])
+    s31_err = np.abs(s_params["L"][1] - s_params["pi"][1])
+    ax_err.semilogy(base_cfg.freqs, s11_err, color="C2", label="|S11 error|")
+    ax_err.semilogy(base_cfg.freqs, s31_err, color="C3", label="|S31 error|")
+    ax_err.set_title("L vs Pi model error")
+    ax_err.set_xlabel("Frequency (GHz)")
+    ax_err.set_ylabel("|S(L) - S(Pi)|")
+    ax_err.legend()
+    ax_err.grid(True, alpha=0.3, which="both")
+
     fig.suptitle("L cell vs symmetric Pi cell — S-parameters")
     fig.tight_layout()
 
