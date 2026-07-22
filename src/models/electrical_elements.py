@@ -3,18 +3,21 @@ from functools import reduce
 import numpy as np
 
 
-def band_coupling(n: int, offset: int) -> np.ndarray:
-    """n x n symmetric matrix with 1s on the +/- `offset` diagonals.
+def band_coupling_phased(n: int, offset: int, theta: float) -> np.ndarray:
+    """n x n complex band-coupling matrix for a pump modulation cos(w_p t - theta).
 
-    offset=1 -> nearest-neighbour band coupling (the B1 in L0(1+eps B1+...)).
-    offset=2 -> second-neighbour coupling (the eps^2 'C' matrix), etc.
+    Entry [target, source]: a target sideband above its source (up-shift,
+    towards +w_p) picks up exp(-i*offset*theta); a target below its source
+    (down-shift) picks up the conjugate exp(+i*offset*theta). Must stay a conjugate
+    pair (not the same phase on both diagonals) or the sideband-coupling
+    matrix stops being passive/lossless (fails Manley-Rowe / pseudo-unitarity).
     """
-    M = np.zeros((n, n))
+    M = np.zeros((n, n), dtype=complex)
     if abs(offset) >= n or offset == 0:
         return M
     idx = np.arange(n - abs(offset))
-    M[idx, idx + abs(offset)] = 1.0
-    M[idx + abs(offset), idx] = 1.0
+    M[idx, idx + abs(offset)] = np.exp(1j * abs(offset) * theta)      # target < source: down-shift
+    M[idx + abs(offset), idx] = np.exp(-1j * abs(offset) * theta)     # target > source: up-shift
     return M
 
 
@@ -75,6 +78,18 @@ class Component:
     def admittance(self, omega):
         return _invert(self.impedance(omega))
 
+    def impedance_matrix(self, omega):
+        """impedance(omega) as an (..., n, n) matrix, diagonal if this
+        component doesn't couple sidebands."""
+        Z = np.asarray(self.impedance(omega))
+        return Z if _is_matrix(Z) else _diag_promote(Z)
+
+    def admittance_matrix(self, omega):
+        """admittance(omega) as an (..., n, n) matrix, diagonal if this
+        component doesn't couple sidebands."""
+        Y = np.asarray(self.admittance(omega))
+        return Y if _is_matrix(Y) else _diag_promote(Y)
+
     @staticmethod
     def series(*components: "Component") -> "Component":
         return _Combination(components, "series")
@@ -104,10 +119,13 @@ class ModulatedInductor(Component):
     """
     Pump-modulated (Josephson) inductor.
 
-    The bare inductance is modulated by a pump tone, coupling sidebands
-    through the (n, n) matrix
+    The bare inductance is modulated by a pump tone cos(w_p t - theta),
+    coupling sidebands through the (n, n) matrix
 
-        L / L0 = I + sum_{p=1}^{order} eps^p * coeffs[p] * band_coupling(n, p)
+        L / L0 = I + sum_{p=1}^{order} eps^p * coeffs[p] * band_coupling_phased(n, p, theta)
+
+    `theta` is the pump's propagation phase at this cell's position
+    (e.g. omega_pump/v_pump * z).
 
     impedance(omega) = j * Omega @ (L0 * L/L0), where Omega = diag(omega)
     over the trailing axis of `omega`. Unlike a plain Inductor/Capacitor,
@@ -118,9 +136,10 @@ class ModulatedInductor(Component):
     one element.
     """
 
-    def __init__(self, L0, eps, order=1, coeffs=None):
+    def __init__(self, L0, eps, order=1, coeffs=None, theta=0.0):
         self.L0 = L0
         self.eps = eps
+        self.theta = theta
         self.coeffs = coeffs if coeffs is not None else {p: 1.0 for p in range(1, order + 1)}
 
     def impedance(self, omega):
@@ -133,7 +152,7 @@ class ModulatedInductor(Component):
 
         L = np.eye(n, dtype=complex)
         for p, a in self.coeffs.items():
-            L = L + (self.eps ** p) * a * band_coupling(n, p)
+            L = L + (self.eps ** p) * a * band_coupling_phased(n, p, self.theta)
 
         Z = 1j * Omega @ (self.L0 * L)
         return Z[0] if Z.shape[0] == 1 else Z
@@ -233,7 +252,7 @@ class ModulatedInductorMultiPump(Component):
         for j in range(self.P):
             for p, a in self.coeffs[j].items():
                 mats = list(Is)                       # identities in every slot
-                mats[j] = band_coupling(dims[j], p).astype(complex)  # hop in slot j
+                mats[j] = band_coupling_phased(dims[j], p).astype(complex)  # hop in slot j
                 L = L + (self.eps[j] ** p) * a * _kron_list(mats)
 
         return L

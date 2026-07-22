@@ -91,22 +91,26 @@ class JTLDiscrete:
             _C = C_end
 
             
+            # Sideband frequencies for each signal freq: (Nf, n)
+            omega_sb = w_s[:, None] + np.array(config.ks_state)[None, :] * w_p
+
             Zs_harm_arr = np.zeros((Nf, n, n), dtype=complex)
             if not first:
-                # Sideband frequencies for each signal freq: (Nf, n)
-                omega_sb = w_s[:, None] + np.array(config.ks_state)[None, :] * w_p
                 # Exact parallel-LC series impedance: JJ inductor || self-capacitance
                 Ccap_val = 1.0 / (_wj**2 * _L)
                 squid = Component.parallel(
-                    ModulatedInductor(L0=_L, eps=_eps, order=M),
+                    ModulatedInductor(L0=_L, eps=_eps, order=M, theta=_th),
                     Capacitor(Ccap_val),
                 )
-                Zs_harm_arr = squid.impedance(omega_sb)  # (Nf, n, n)
-            Yg_harm_arr = np.zeros((M, Nf), dtype=complex)
+                Zs_harm_arr = squid.impedance_matrix(omega_sb)  # (Nf, n, n)
+
+            # Shunt-to-ground capacitor: unmodulated, so it doesn't couple
+            # sidebands -- its harmonic matrix is diagonal.
+            Yg_harm_arr = Capacitor(_C).admittance_matrix(omega_sb)  # (Nf, n, n)
 
             cells.append(
                 CellImmitance(
-                    theta=_th,
+                    theta=0,
                     Zs0_fn=lambda w, L=_L, wji=_wj, f=first: 0.0,
                     Yg0_fn=lambda w, cap=Capacitor(_C): cap.admittance(w),
                     Zs_harm_fn=Zs_harm_arr,

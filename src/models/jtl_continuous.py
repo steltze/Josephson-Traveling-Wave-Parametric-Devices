@@ -247,7 +247,7 @@ class JTLContinuous:
             log.info("Continuous model mode: converter")
 
             kp = cfg.omega_pump * cfg.cell_size / (cfg.propagation_direction*cfg.v_pump)
-            kappa = kS - kI + kp  # ks + kp = ki but kp, ki < 0 so we do -kp, -(-ki)
+            kappa = kS - kI - kp  # ks + kp = ki but kp, ki < 0 so we do -kp, -(-ki)
 
             q_sq = (
                 -m_eff**2 / 16.0 * kS * kI
@@ -269,7 +269,7 @@ class JTLContinuous:
             log.info("Continuous model mode: amplifier")
 
             kp = cfg.omega_pump * cfg.cell_size / (cfg.propagation_direction*cfg.v_pump)
-            kappa = kS + kI + kp  
+            kappa = kS + kI - kp  
             
             q_sq = (m_eff**2) * kI * kS / 16.0
             Delta = q_sq - (kappa / 2.0) ** 2

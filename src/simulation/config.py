@@ -148,6 +148,6 @@ class SimulationConfig:
     def propagation_direction(self) -> float:
         """Co- or counter-propagating signal and idler."""
         if self.v_ratio > 0:
-            return -1.0
-        else:
             return 1.0
+        else:
+            return -1.0

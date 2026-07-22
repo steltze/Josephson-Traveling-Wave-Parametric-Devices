@@ -27,7 +27,7 @@ def _base_config(**overrides):
         omega_j=60 * 2 * np.pi,
         epsilon=0.04,
         omega_c=3.4 * 2 * np.pi,
-        v_ratio=-1.0,
+        v_ratio=1.0,
         freq_min=1,
         freq_max=14,
         n_freqs=500,  # increase to 5000 to see interesting spikes

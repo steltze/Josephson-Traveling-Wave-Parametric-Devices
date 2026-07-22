@@ -13,6 +13,7 @@ from numerical_solver.s_matrix import SMatrix, ABCD_to_S, cascade_all
 from analysis.dispersion_relation import bloch_wavenumbers
 from analysis.s_parameters import plot_s_parameters as _plot_s_params
 from logger import get_logger, timer as _timer
+from numerical_solver.tranfer_matrix import single_mode_matrix_grid
 
 log = get_logger(__name__)
 
@@ -234,21 +235,26 @@ class Simulation:
     def _get_T_grid(self) -> np.ndarray:
         """Evaluate T_sym on the full (Nf, Nc) grid; cached after first call."""
         if self._T_grid is None:
-            T_sym, _ = self.get_symbolic_matrix()
+            # T_sym, _ = self.get_symbolic_matrix()
             cells = self._cell_cls.build(self._cfg, cell_topology=self._cell_topology)
-            dim = len(self._state_syms)
+            # dim = len(self._state_syms)
             with _timer("Numerical cell matrices"):
-                self._T_grid = self._model.build_cell_freq_matrices(
-                    T_sym,
-                    dim,
-                    self._cfg.M,
-                    self._cfg.ks_state,
-                    self._Zs_m_p,
-                    self._Zs_m_m,
-                    self._Yg_m_p,
-                    self._Yg_m_m,
-                    self._cfg.omegas,
-                    self._cfg.omega_pump,
+                self._T_grid = single_mode_matrix_grid(
                     cells,
+                    self._cell_topology,
                 )
+                
+                # self._T_grid = self._model.build_cell_freq_matrices(
+                #     T_sym,
+                #     dim,
+                #     self._cfg.M,
+                #     self._cfg.ks_state,
+                #     self._Zs_m_p,
+                #     self._Zs_m_m,
+                #     self._Yg_m_p,
+                #     self._Yg_m_m,
+                #     self._cfg.omegas,
+                #     self._cfg.omega_pump,
+                #     cells,
+                # )
         return self._T_grid
