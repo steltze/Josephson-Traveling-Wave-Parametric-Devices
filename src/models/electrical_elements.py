@@ -218,15 +218,22 @@ class ModulatedInductorMultiPump(Component):
     coeffs : dict or sequence of dicts, optional
         Expansion coefficients {p: a_p}. A single dict applies to every pump;
         a list gives per-pump coefficients. Defaults to {p: 1.0}.
+    theta : sequence of P floats, optional
+        Per-pump propagation phase at this cell's position (e.g.
+        omega_pj/v_pj * z), same role as `theta` in ModulatedInductor.
+        Defaults to 0.0 for every pump.
     """
 
-    def __init__(self, L0, eps, n_sidebands, order=1, coeffs=None):
+    def __init__(self, L0, eps, n_sidebands, order=1, coeffs=None, theta=None):
         self.L0 = L0
         self.eps = list(eps)
         self.n_sidebands = list(n_sidebands)
         self.P = len(self.eps)
         if len(self.n_sidebands) != self.P:
             raise ValueError("eps and n_sidebands must have the same length P")
+        self.theta = list(theta) if theta is not None else [0.0] * self.P
+        if len(self.theta) != self.P:
+            raise ValueError("theta must have the same length P")
 
         # normalise coeffs -> one dict per pump
         if coeffs is None:
@@ -252,7 +259,7 @@ class ModulatedInductorMultiPump(Component):
         for j in range(self.P):
             for p, a in self.coeffs[j].items():
                 mats = list(Is)                       # identities in every slot
-                mats[j] = band_coupling_phased(dims[j], p).astype(complex)  # hop in slot j
+                mats[j] = band_coupling_phased(dims[j], p, self.theta[j])  # hop in slot j
                 L = L + (self.eps[j] ** p) * a * _kron_list(mats)
 
         return L

@@ -10,6 +10,7 @@ from backends import Backend
 from symbolic_solver.cell_single_mode import CellSingleMode
 from symbolic_solver.cell_single_mode_symmetric import CellSingleModeSymmetric
 from numerical_solver.s_matrix import SMatrix, ABCD_to_S, cascade_all
+from models.electrical_elements import multipump_frequency_grid
 from analysis.dispersion_relation import bloch_wavenumbers
 from analysis.s_parameters import plot_s_parameters as _plot_s_params
 from logger import get_logger, timer as _timer
@@ -149,8 +150,19 @@ class Simulation:
                 self._S_matrix = SMatrix(S_total, self._cfg.Z0)
 
             if normalize:
-                ks = np.asarray(self._cfg.ks_state)
-                port_omegas_half = np.abs(self._cfg.omegas[:, None] + ks[None, :] * self._cfg.omega_pump)  # (Nf, N//2)
+                if isinstance(self._cfg.omega_pump, list):
+                    # Multi-pump: tracked state is the (k_1,...,k_P) tensor
+                    # lattice, not a flat ks_state -- build the same
+                    # per-state frequency grid JTLDiscreteMultiPump uses,
+                    # via multipump_frequency_grid (kron/itertools.product
+                    # order), one signal frequency at a time.
+                    port_omegas_half = np.abs(np.stack([
+                        multipump_frequency_grid(ws, self._cfg.omega_pump, self._cfg.Kmax)[0]
+                        for ws in self._cfg.omegas
+                    ]))  # (Nf, N//2)
+                else:
+                    ks = np.asarray(self._cfg.ks_state)
+                    port_omegas_half = np.abs(self._cfg.omegas[:, None] + ks[None, :] * self._cfg.omega_pump)  # (Nf, N//2)
                 port_omegas = np.concatenate([port_omegas_half, port_omegas_half], axis=1)  # (Nf, N)
                 weights = 1 / np.sqrt(port_omegas)
                 S_ph = self._S_matrix.array / (weights[:, None, :] / weights[:, :, None])

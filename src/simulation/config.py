@@ -27,14 +27,23 @@ class SimulationConfig:
         Signal/idler mode cutoff angular frequency (rad/GHz).
     omega_j : float
         Junction plasma angular frequency (rad/GHz).
-    epsilon : float
-        Pump modulation depth of the series inductance.
+    epsilon : float | list[float]
+        Pump modulation depth of the series inductance. A single pump tone
+        (float) or, for a multi-pump line, one depth per pump (length P) —
+        see models.jtl_discrete_multipump.JTLDiscreteMultiPump.
     omega_c : float
         Target centre angular frequency for phase matching (rad/GHz).
-    v_ratio : float
+    v_ratio : float | list[float]
         v_signal / v_pump — how much slower the pump is vs the signal.
-    omega_pump : float | None
-        Pump angular frequency (rad/GHz). If None, derived as v_ratio * omega_c.
+        Float for single-pump, length-P list matching `epsilon` for
+        multi-pump.
+    omega_pump : float | list[float] | None
+        Pump angular frequency (rad/GHz), float or length-P list matching
+        `epsilon`. If None, derived elementwise as v_ratio * omega_c.
+    Kmax : int | list[int] | None
+        Multi-pump only: per-pump sideband truncation (length P, matching
+        `epsilon`). Replaces `ks_state`'s role for the multi-pump tensor
+        lattice. Unused for single-pump configs.
     freq_min, freq_max : float
         Frequency sweep edges (GHz).
     n_freqs : int
@@ -65,11 +74,12 @@ class SimulationConfig:
     omega_cutoff: float = 50 * 2 * np.pi
     omega_j: float = 30 * 2 * np.pi
 
-    # Pump
-    epsilon: float = 0.0
+    # Pump (float = single tone; list[float] length P = multi-pump)
+    epsilon: float | list[float] = 0.0
     omega_c: float = 5 * 2 * np.pi
-    v_ratio: float = 3.0
-    omega_pump: float | None = None  # None → v_ratio * omega_c
+    v_ratio: float | list[float] = 3.0
+    omega_pump: float | list[float] | None = None  # None → v_ratio * omega_c
+    Kmax: int | list[int] | None = None  # multi-pump per-pump sideband truncation
 
     # Frequency sweep (GHz)
     freq_min: float = 0.5
@@ -86,7 +96,23 @@ class SimulationConfig:
 
     def __post_init__(self) -> None:
         if self.omega_pump is None:
-            self.omega_pump = self.v_ratio * self.omega_c
+            if isinstance(self.v_ratio, list):
+                self.omega_pump = [vr * self.omega_c for vr in self.v_ratio]
+            else:
+                self.omega_pump = self.v_ratio * self.omega_c
+
+        multi_pump = isinstance(self.epsilon, list)
+        if multi_pump:
+            P = len(self.epsilon)
+            for name, value in (("v_ratio", self.v_ratio), ("omega_pump", self.omega_pump)):
+                if not isinstance(value, list) or len(value) != P:
+                    raise ValueError(
+                        f"{name} must be a list of length {P} (matching epsilon) "
+                        "for a multi-pump config"
+                    )
+            if self.Kmax is not None and (not isinstance(self.Kmax, list) or len(self.Kmax) != P):
+                raise ValueError(f"Kmax must be a list of length {P} (matching epsilon)")
+            return  # ks_state / plasma-resonance warnings below are single-pump-only
 
         if self.ks_state:
             max_k = max(self.ks_state)
@@ -140,14 +166,17 @@ class SimulationConfig:
         return self.cell_size * self.omega_cutoff / 2
 
     @property
-    def v_pump(self) -> float:
-        """Pump phase velocity (m/s)."""
+    def v_pump(self) -> float | list[float]:
+        """Pump phase velocity (m/s), or one per pump for a multi-pump config."""
+        if isinstance(self.v_ratio, list):
+            return [self.v_signal / vr for vr in self.v_ratio]
         return self.v_signal / self.v_ratio
     
     @property
     def propagation_direction(self) -> float:
         """Co- or counter-propagating signal and idler."""
-        if self.v_ratio > 0:
+        v_ratio = self.v_ratio[0] if isinstance(self.v_ratio, list) else self.v_ratio
+        if v_ratio > 0:
             return 1.0
         else:
             return -1.0

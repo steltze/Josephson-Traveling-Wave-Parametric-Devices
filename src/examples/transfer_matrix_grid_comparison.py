@@ -27,10 +27,10 @@ def _base_config(**overrides):
         v_ratio=2.5,
         freq_min=1,
         freq_max=12,
-        n_freqs=16,
+        n_freqs=500,
         disorder=False,
         nramp=0,
-        ncell=4,
+        ncell=321,
     )
     cfg_kwargs.update(overrides)
     return SimulationConfig(**cfg_kwargs)
@@ -59,6 +59,24 @@ def _compare_one(cfg):
         cells,
     )
     return T_numeric, T_symbolic, state_syms
+
+
+def _signal_s_matrix(cfg, T_grid):
+    """
+    S-parameter array (Nf, N, N) for a given (pre-computed) T_grid, using the
+    same cascade + photon-flux normalization as `Simulation.get_s_matrix`.
+    """
+    sim = Simulation(JTLDiscrete, cfg, cell_topology="L")
+    sim._T_grid = T_grid  # bypass _get_T_grid(); reuse its cascade/normalize logic
+    return sim.get_s_matrix().array
+
+
+def _signal_left_right_ports(ks_state):
+    """0-based (row, col) into the S-matrix for the ks=0 (signal) port,
+    right (output) <- left (input)."""
+    Nk = len(ks_state)
+    idx0 = ks_state.index(0)
+    return Nk + idx0, idx0
 
 
 def compare_transfer_matrix_implementations():
@@ -92,8 +110,11 @@ def compare_transfer_matrix_implementations():
       only ever reads bands 0..M off the exact matrix before assembling T.
     """
     cases = [
-        ("M=1, ks=[0,1]", _base_config(M=1, ks_state=[0, 1])),
-        ("M=2, ks=[-2..2]", _base_config(M=2, ks_state=[-2, -1, 0, 1, 2])),
+        ("M=1, ks=[0,1]", _base_config(M=1, ks_state=[0, 1], ncell=320, n_freqs=500)),
+        (
+            "M=2, ks=[-2..2]",
+            _base_config(M=2, ks_state=[-2, -1, 0, 1, 2], ncell=320, n_freqs=500),
+        ),
     ]
 
     plt.figure()
@@ -126,6 +147,31 @@ def compare_transfer_matrix_implementations():
     plt.title("single_mode_matrix_grid vs. build_cell_freq_matrices")
     plt.legend()
     plt.grid(True, alpha=0.25)
+
+    # --- signal (k=0) left-to-right transmission, both builders ---
+    for label, cfg in cases:
+        T_numeric, T_symbolic, _ = _compare_one(cfg)
+        S_numeric = _signal_s_matrix(cfg, T_numeric)
+        S_symbolic = _signal_s_matrix(cfg, T_symbolic)
+        row, col = _signal_left_right_ports(cfg.ks_state)
+
+        s_num = S_numeric[:, row, col]
+        s_sym = S_symbolic[:, row, col]
+        db_num = 20.0 * np.log10(np.abs(s_num))
+        db_sym = 20.0 * np.log10(np.abs(s_sym))
+
+        fig, (ax_mag, ax_diff) = plt.subplots(2, 1, sharex=True, figsize=(8, 7))
+        ax_mag.plot(cfg.freqs, db_num, label="single_mode_matrix_grid (active)")
+        ax_mag.plot(cfg.freqs, db_sym, "--", label="build_cell_freq_matrices (symbolic)")
+        ax_mag.set_ylabel("|S| signal L->R (dB)")
+        ax_mag.set_title(f"Signal (k=0) transmission, {label}")
+        ax_mag.legend()
+        ax_mag.grid(True, alpha=0.25)
+
+        ax_diff.semilogy(cfg.freqs, np.maximum(np.abs(db_num - db_sym), 1e-18))
+        ax_diff.set_xlabel("Frequency (GHz)")
+        ax_diff.set_ylabel("|dB difference|")
+        ax_diff.grid(True, alpha=0.25)
 
     # save_all("transfer_matrix_grid_comparison")
     plt.show()
