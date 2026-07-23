@@ -10,6 +10,31 @@ class NumpyBackend(Backend):
 
     name = "numpy"
 
+    def single_mode_matrix(self, Zs: np.ndarray, Yg: np.ndarray) -> np.ndarray:
+        Nf, m, _ = Zs.shape
+        I = np.eye(m, dtype=complex)
+        # Write blocks directly into the output instead of concatenate-ing
+        # halves together -- avoids allocating `top`/`bottom` plus a third
+        # full-size copy for the final join.
+        T = np.empty((Nf, 2 * m, 2 * m), dtype=complex)
+        T[:, :m, :m] = I
+        T[:, :m, m:] = -Zs
+        T[:, m:, :m] = -Yg
+        T[:, m:, m:] = I + Yg @ Zs
+        return T
+
+    def symmetric_single_mode_matrix(self, Zs: np.ndarray, Yg: np.ndarray) -> np.ndarray:
+        # Symmetric pi-cell: shunt Yg/2 - series Zs - shunt Yg/2
+        Nf, m, _ = Zs.shape
+        I = np.eye(m, dtype=complex)
+        Yg_half = Yg / 2
+        T = np.empty((Nf, 2 * m, 2 * m), dtype=complex)
+        T[:, :m, :m] = I + Zs @ Yg_half
+        T[:, :m, m:] = -Zs
+        T[:, m:, :m] = -Yg - Yg_half @ Zs @ Yg_half
+        T[:, m:, m:] = I + Yg_half @ Zs
+        return T
+
     def abcd_to_s(self, abcd: np.ndarray, z0: np.ndarray) -> np.ndarray:
         Nf, N, _ = abcd.shape
         k = N // 2
@@ -24,26 +49,26 @@ class NumpyBackend(Backend):
         Cinv = Cinv_CinvD[:, :, :k]
         CinvD = Cinv_CinvD[:, :, k:]
 
-        Z = np.empty((Nf, N, N), dtype=complex)
-        Z[:, :k, :k] = A @ Cinv
-        Z[:, :k, k:] = A @ Cinv @ D - B  # block form; A@Cinv@D != (A@D)@Cinv unless C,D commute
-        Z[:, k:, :k] = Cinv
-        Z[:, k:, k:] = CinvD
-
-        # diagonal matrices  diag(Z0)  and  diag(conj(Z0))
-        Z0d = np.zeros((Nf, N, N), dtype=complex)
-        Z0cd = np.zeros((Nf, N, N), dtype=complex)
+        # M = Z - diag(conj(Z0)), built directly rather than via a separate
+        # Z plus a dense (Nf,N,N) diag(conj(Z0)) matrix -- Z0 only ever
+        # touches N of the N^2 entries, so it's applied as an in-place
+        # diagonal update instead of materializing it.
+        M = np.empty((Nf, N, N), dtype=complex)
+        M[:, :k, :k] = A @ Cinv
+        M[:, :k, k:] = A @ Cinv @ D - B  # block form; A@Cinv@D != (A@D)@Cinv unless C,D commute
+        M[:, k:, :k] = Cinv
+        M[:, k:, k:] = CinvD
         idx = np.arange(N)
-        Z0d[:, idx, idx] = z0
-        Z0cd[:, idx, idx] = np.conj(z0)
+        M[:, idx, idx] -= np.conj(z0)
 
         # power-wave S = √G0 (Z - Z0*) (Z + Z0)^{-1} √G0^{-1}
         G0 = np.real(z0)
         sqrtG0 = np.sqrt(G0)
         inv_sqrtG0 = 1.0 / sqrtG0
 
-        M = Z - Z0cd  # numerator
-        P = Z + Z0d  # denominator
+        # P = Z + diag(Z0) = M + diag(Z0 + conj(Z0)) = M + diag(2 Re(Z0))
+        P = M.copy()
+        P[:, idx, idx] += 2.0 * G0
         # right-solve P^{-1}: S0 = M P^{-1}  ->  P^T S0^T = M^T
         S0 = np.linalg.solve(P.swapaxes(-1, -2), M.swapaxes(-1, -2)).swapaxes(-1, -2)
 

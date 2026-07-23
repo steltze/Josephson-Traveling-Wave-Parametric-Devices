@@ -23,9 +23,10 @@ def two_pump_jtl(cell_topology: str = "pi", backend=None):
         idler1 = signal + pump1
         idler2 = signal + pump2
 
-    Kmax tracks each pump's sideband count (see
+    Kmax is a list of P (k_min, k_max) pairs, one per pump (see
     models.electrical_elements.ModulatedInductorMultiPump), giving a
-    prod(2*Kmax+1)-state tensor lattice.
+    prod(k_max_j - k_min_j + 1)-state tensor lattice. Pairs need not be
+    symmetric about 0.
 
     Uses the `Simulation` class with `cell_cls=JTLDiscreteMultiPump`.
     `Simulation._get_T_grid` only calls `cell_cls.build` +
@@ -45,7 +46,7 @@ def two_pump_jtl(cell_topology: str = "pi", backend=None):
         omega_pump = [6.8 * 2 * np.pi, 5 * 2 * np.pi],
         epsilon=[0.05, 0.03],
         v_ratio=[-2.5, -2.00],
-        Kmax=[1, 1],
+        Kmax=[(0, 1), (0, 1)],
         freq_min=1,
         freq_max=14,
         n_freqs=500,

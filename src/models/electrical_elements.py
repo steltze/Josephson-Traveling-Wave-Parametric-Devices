@@ -146,15 +146,15 @@ class ModulatedInductor(Component):
         omega = np.atleast_2d(np.asarray(omega, dtype=float))  # (Nf, n)
         Nf, n = omega.shape
 
-        Omega = np.zeros((Nf, n, n), dtype=complex)
-        idx = np.arange(n)
-        Omega[:, idx, idx] = omega
-
         L = np.eye(n, dtype=complex)
         for p, a in self.coeffs.items():
             L = L + (self.eps ** p) * a * band_coupling_phased(n, p, self.theta)
 
-        Z = 1j * Omega @ (self.L0 * L)
+        # Omega = diag(omega); Omega @ M is row-scaling, not a real matmul --
+        # done via broadcasting instead of materializing a mostly-zero
+        # (Nf,n,n) diagonal matrix and paying an O(Nf n^3) batched matmul
+        # for what's really an O(Nf n^2) elementwise scale.
+        Z = 1j * omega[:, :, None] * (self.L0 * L)[None, :, :]
         return Z[0] if Z.shape[0] == 1 else Z
 
 
@@ -280,13 +280,21 @@ class ModulatedInductorMultiPump(Component):
                 f"(n_sidebands={self.n_sidebands})"
             )
 
-        Omega = np.zeros((Nf, D, D), dtype=complex)
-        idx = np.arange(D)
-        Omega[:, idx, idx] = omega
-
         L = self._build_L_over_L0()                 # (D, D)
-        Z = 1j * Omega @ (self.L0 * L)              # (Nf, D, D)
+        # Omega = diag(omega); Omega @ M is row-scaling, not a real matmul --
+        # done via broadcasting instead of materializing a mostly-zero
+        # (Nf,D,D) diagonal matrix and paying an O(Nf D^3) batched matmul
+        # for what's really an O(Nf D^2) elementwise scale. D grows
+        # multiplicatively with pump count, so this is the dominant cost
+        # for multi-pump cells.
+        Z = 1j * omega[:, :, None] * (self.L0 * L)[None, :, :]  # (Nf, D, D)
         return Z[0] if Z.shape[0] == 1 else Z
+
+
+def n_sidebands_from_Kmax(Kmax) -> list[int]:
+    """Per-pump ladder size n_j = k_max - k_min + 1, from a Kmax list of
+    (k_min, k_max) pairs."""
+    return [k_max - k_min + 1 for k_min, k_max in Kmax]
 
 
 def multipump_frequency_grid(omega_s, omega_p, Kmax):
@@ -294,13 +302,19 @@ def multipump_frequency_grid(omega_s, omega_p, Kmax):
     Build the per-sideband frequency vector on the tensor lattice, in the
     same kron flattening order the coupling matrix uses (first pump = outer).
 
+    Kmax : sequence of P (k_min, k_max) pairs, e.g. [(-2, 3), (-1, 1)] --
+        pump j tracks sidebands k_min_j..k_max_j (need not be symmetric
+        about 0). ModulatedInductorMultiPump's coupling matrix hops by
+        ladder *position*, so each pump's range must stay contiguous
+        unit-spaced integers to match a physical sideband shift.
+
     Returns
     -------
     omega_grid : (D,) array of  omega_s + sum_j k_j * omega_pj
     labels     : list of (k_1,...,k_P) tuples in matching order
     """
     from itertools import product
-    ranges = [range(-K, K + 1) for K in Kmax]
+    ranges = [range(k_min, k_max + 1) for k_min, k_max in Kmax]
     labels = list(product(*ranges))
     omega_p = np.asarray(omega_p, dtype=float)
     omega_grid = np.array(

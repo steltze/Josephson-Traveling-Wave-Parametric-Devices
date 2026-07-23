@@ -15,6 +15,21 @@ def _make_identity_S(Nf, N):
 
 
 class TestNumpyBackendDirect:
+    def test_single_mode_matrix_known_1x1_result(self):
+        backend = NumpyBackend()
+        Zs = np.array([[[2.0]]], dtype=complex)
+        Yg = np.array([[[3.0]]], dtype=complex)
+        expected = np.array([[[1.0, -2.0], [-3.0, 7.0]]], dtype=complex)
+        np.testing.assert_allclose(backend.single_mode_matrix(Zs, Yg), expected)
+
+    def test_symmetric_single_mode_matrix_zero_coupling_is_identity(self):
+        backend = NumpyBackend()
+        Nf, m = 3, 2
+        Zs = np.zeros((Nf, m, m), dtype=complex)
+        Yg = np.zeros((Nf, m, m), dtype=complex)
+        expected = np.broadcast_to(np.eye(2 * m, dtype=complex), (Nf, 2 * m, 2 * m))
+        np.testing.assert_allclose(backend.symmetric_single_mode_matrix(Zs, Yg), expected)
+
     def test_abcd_to_s_known_2port_result(self):
         """Same fixture as the module-level ABCD_to_S test, called on the backend directly."""
         backend = NumpyBackend()

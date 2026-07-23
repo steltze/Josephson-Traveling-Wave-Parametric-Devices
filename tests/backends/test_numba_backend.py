@@ -28,7 +28,44 @@ def _make_identity_s(Nf, N):
     return S
 
 
+def _random_zy(rng, Nf, m):
+    Zs = rng.standard_normal((Nf, m, m)) + 1j * rng.standard_normal((Nf, m, m))
+    Yg = rng.standard_normal((Nf, m, m)) + 1j * rng.standard_normal((Nf, m, m))
+    return Zs, Yg
+
+
+class _StubCell:
+    def __init__(self, Zs, Yg):
+        self.Zs_harm_fn = Zs
+        self.Yg_harm_fn = Yg
+
+
 class TestNumbaMatchesNumpy:
+    @pytest.mark.parametrize("m", [1, 2, 4])
+    def test_single_mode_matrix(self, m):
+        rng = np.random.default_rng(50 + m)
+        Zs, Yg = _random_zy(rng, 5, m)
+        expected = NumpyBackend().single_mode_matrix(Zs, Yg)
+        actual = NumbaBackend().single_mode_matrix(Zs, Yg)
+        np.testing.assert_allclose(actual, expected, atol=1e-10)
+
+    @pytest.mark.parametrize("m", [1, 2, 4])
+    def test_symmetric_single_mode_matrix(self, m):
+        rng = np.random.default_rng(60 + m)
+        Zs, Yg = _random_zy(rng, 5, m)
+        expected = NumpyBackend().symmetric_single_mode_matrix(Zs, Yg)
+        actual = NumbaBackend().symmetric_single_mode_matrix(Zs, Yg)
+        np.testing.assert_allclose(actual, expected, atol=1e-10)
+
+    @pytest.mark.parametrize("topology", ["L", "pi"])
+    def test_single_mode_matrix_grid(self, topology):
+        rng = np.random.default_rng(70)
+        Nf, m, Ncells = 4, 3, 5
+        cells = [_StubCell(*_random_zy(rng, Nf, m)) for _ in range(Ncells)]
+        expected = NumpyBackend().single_mode_matrix_grid(cells, topology)
+        actual = NumbaBackend().single_mode_matrix_grid(cells, topology)
+        np.testing.assert_allclose(actual, expected, atol=1e-10)
+
     @pytest.mark.parametrize("N", [2, 4, 6])
     def test_abcd_to_s(self, N):
         rng = np.random.default_rng(100 + N)

@@ -10,6 +10,12 @@ class IncompleteBackend(Backend):
 
     name = "incomplete"
 
+    def single_mode_matrix(self, Zs, Yg):
+        return Zs
+
+    def symmetric_single_mode_matrix(self, Zs, Yg):
+        return Zs
+
     def abcd_to_s(self, abcd, z0):
         return abcd
 
@@ -46,3 +52,32 @@ class TestDefaultCascadeAll:
         s_cells = rng.standard_normal((3, 1, 4, 4)) + 1j * rng.standard_normal((3, 1, 4, 4))
         backend = NumpyBackend()
         np.testing.assert_array_equal(backend.cascade_all(s_cells), s_cells[:, 0])
+
+
+class _StubCell:
+    def __init__(self, Zs, Yg):
+        self.Zs_harm_fn = Zs
+        self.Yg_harm_fn = Yg
+
+
+class TestDefaultSingleModeMatrixGrid:
+    """`Backend.single_mode_matrix_grid`'s default per-cell loop, exercised via NumpyBackend."""
+
+    @pytest.mark.parametrize("topology", ["L", "pi"])
+    def test_matches_per_cell_calls(self, topology):
+        rng = np.random.default_rng(2)
+        Nf, m, Ncells = 3, 2, 4
+        cells = [
+            _StubCell(
+                rng.standard_normal((Nf, m, m)) + 1j * rng.standard_normal((Nf, m, m)),
+                rng.standard_normal((Nf, m, m)) + 1j * rng.standard_normal((Nf, m, m)),
+            )
+            for _ in range(Ncells)
+        ]
+        backend = NumpyBackend()
+        fn = backend.single_mode_matrix if topology == "L" else backend.symmetric_single_mode_matrix
+
+        T_grid = backend.single_mode_matrix_grid(cells, topology)
+        assert T_grid.shape == (Nf, Ncells, 2 * m, 2 * m)
+        for c, cell in enumerate(cells):
+            np.testing.assert_allclose(T_grid[:, c], fn(cell.Zs_harm_fn, cell.Yg_harm_fn))

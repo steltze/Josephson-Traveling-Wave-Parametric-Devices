@@ -8,6 +8,7 @@ from models.electrical_elements import (
     ModulatedInductorMultiPump,
     Capacitor,
     multipump_frequency_grid,
+    n_sidebands_from_Kmax,
 )
 
 
@@ -22,11 +23,13 @@ class JTLDiscreteMultiPump:
         omega_pump : sequence of P pump angular frequencies
         v_pump     : sequence of P pump phase velocities
         epsilon    : sequence of P modulation depths
-        Kmax       : sequence of P per-pump sideband truncations. The
-                     tracked state is the FULL tensor lattice
-                     n_sidebands[j] = 2*Kmax[j]+1, D = prod(n_sidebands)
-                     (see multipump_frequency_grid), replacing the
-                     single-pump `ks_state` list.
+        Kmax       : sequence of P (k_min, k_max) pairs, e.g.
+                     [(-2, 3), (-1, 1)] (need not be symmetric about 0).
+                     The tracked state is the FULL tensor lattice
+                     n_sidebands[j] = k_max_j - k_min_j + 1,
+                     D = prod(n_sidebands) (see multipump_frequency_grid
+                     / n_sidebands_from_Kmax), replacing the single-pump
+                     `ks_state` list.
     Everything else (Z0, ncell, cell_size, omega_cutoff, omega_j, nramp,
     disorder*, M, omegas) is shared/scalar exactly as in JTLDiscrete.
     """
@@ -100,7 +103,7 @@ class JTLDiscreteMultiPump:
         thetas = [w_p[j] / v_p[j] * ns * a for j in range(P)]     # P x (ncell,)
 
         Kmax = list(config.Kmax)
-        n_sb = [2 * K + 1 for K in Kmax]
+        n_sb = n_sidebands_from_Kmax(Kmax)
 
         M = config.M
         w_s = np.asarray(config.omegas)  # (Nf,)

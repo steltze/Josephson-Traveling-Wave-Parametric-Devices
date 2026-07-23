@@ -40,10 +40,12 @@ class SimulationConfig:
     omega_pump : float | list[float] | None
         Pump angular frequency (rad/GHz), float or length-P list matching
         `epsilon`. If None, derived elementwise as v_ratio * omega_c.
-    Kmax : int | list[int] | None
-        Multi-pump only: per-pump sideband truncation (length P, matching
-        `epsilon`). Replaces `ks_state`'s role for the multi-pump tensor
-        lattice. Unused for single-pump configs.
+    Kmax : list[tuple[int, int]] | None
+        Multi-pump only: per-pump (k_min, k_max) sideband range (length P,
+        matching `epsilon`), e.g. [(-2, 3), (-1, 1)] -- need not be
+        symmetric about 0. Replaces `ks_state`'s role for the multi-pump
+        tensor lattice: n_sidebands[j] = k_max_j - k_min_j + 1. Unused for
+        single-pump configs.
     freq_min, freq_max : float
         Frequency sweep edges (GHz).
     n_freqs : int
@@ -79,7 +81,7 @@ class SimulationConfig:
     omega_c: float = 5 * 2 * np.pi
     v_ratio: float | list[float] = 3.0
     omega_pump: float | list[float] | None = None  # None → v_ratio * omega_c
-    Kmax: int | list[int] | None = None  # multi-pump per-pump sideband truncation
+    Kmax: list[tuple[int, int]] | None = None  # multi-pump per-pump (k_min, k_max)
 
     # Frequency sweep (GHz)
     freq_min: float = 0.5
@@ -110,8 +112,11 @@ class SimulationConfig:
                         f"{name} must be a list of length {P} (matching epsilon) "
                         "for a multi-pump config"
                     )
-            if self.Kmax is not None and (not isinstance(self.Kmax, list) or len(self.Kmax) != P):
-                raise ValueError(f"Kmax must be a list of length {P} (matching epsilon)")
+            if self.Kmax is not None:
+                if not isinstance(self.Kmax, list) or len(self.Kmax) != P:
+                    raise ValueError(f"Kmax must be a list of length {P} (matching epsilon)")
+                if any(k_min > k_max for k_min, k_max in self.Kmax):
+                    raise ValueError(f"each Kmax entry must have k_min <= k_max, got {self.Kmax}")
             return  # ks_state / plasma-resonance warnings below are single-pump-only
 
         if self.ks_state:

@@ -254,6 +254,7 @@ class Simulation:
                 self._T_grid = single_mode_matrix_grid(
                     cells,
                     self._cell_topology,
+                    backend=self._backend,
                 )
                 
                 # self._T_grid = self._model.build_cell_freq_matrices(

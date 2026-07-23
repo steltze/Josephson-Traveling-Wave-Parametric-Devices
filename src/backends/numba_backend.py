@@ -14,6 +14,63 @@ except ImportError as exc:  # surfaced by registry.get_backend as a chained Impo
 
 
 @numba.njit(cache=True)
+def _single_mode_matrix_single(Zs: np.ndarray, Yg: np.ndarray) -> np.ndarray:
+    m = Zs.shape[0]
+    I = np.eye(m, dtype=np.complex128)
+    T = np.empty((2 * m, 2 * m), dtype=np.complex128)
+    T[:m, :m] = I
+    T[:m, m:] = -Zs
+    T[m:, :m] = -Yg
+    T[m:, m:] = I + Yg @ Zs
+    return T
+
+
+@numba.njit(parallel=True, cache=True)
+def _single_mode_matrix_batch(Zs: np.ndarray, Yg: np.ndarray) -> np.ndarray:
+    Nf, m, _ = Zs.shape
+    T = np.empty((Nf, 2 * m, 2 * m), dtype=np.complex128)
+    for f in numba.prange(Nf):
+        T[f] = _single_mode_matrix_single(Zs[f], Yg[f])
+    return T
+
+
+@numba.njit(cache=True)
+def _symmetric_single_mode_matrix_single(Zs: np.ndarray, Yg: np.ndarray) -> np.ndarray:
+    m = Zs.shape[0]
+    I = np.eye(m, dtype=np.complex128)
+    Yg_half = Yg / 2
+    T = np.empty((2 * m, 2 * m), dtype=np.complex128)
+    T[:m, :m] = I + Zs @ Yg_half
+    T[:m, m:] = -Zs
+    T[m:, :m] = -Yg - Yg_half @ Zs @ Yg_half
+    T[m:, m:] = I + Yg_half @ Zs
+    return T
+
+
+@numba.njit(parallel=True, cache=True)
+def _symmetric_single_mode_matrix_batch(Zs: np.ndarray, Yg: np.ndarray) -> np.ndarray:
+    Nf, m, _ = Zs.shape
+    T = np.empty((Nf, 2 * m, 2 * m), dtype=np.complex128)
+    for f in numba.prange(Nf):
+        T[f] = _symmetric_single_mode_matrix_single(Zs[f], Yg[f])
+    return T
+
+
+@numba.njit(parallel=True, cache=True)
+def _single_mode_matrix_grid_batch(Zs_stack: np.ndarray, Yg_stack: np.ndarray, is_L: bool) -> np.ndarray:
+    """Fused over both frequency and cell axes -- see `NumbaBackend.single_mode_matrix_grid`."""
+    Nf, Nc, m, _ = Zs_stack.shape
+    T = np.empty((Nf, Nc, 2 * m, 2 * m), dtype=np.complex128)
+    for f in numba.prange(Nf):
+        for c in range(Nc):
+            if is_L:
+                T[f, c] = _single_mode_matrix_single(Zs_stack[f, c], Yg_stack[f, c])
+            else:
+                T[f, c] = _symmetric_single_mode_matrix_single(Zs_stack[f, c], Yg_stack[f, c])
+    return T
+
+
+@numba.njit(cache=True)
 def _abcd_to_s_single(abcd: np.ndarray, z0: np.ndarray) -> np.ndarray:
     N = abcd.shape[0]
     k = N // 2
@@ -28,23 +85,27 @@ def _abcd_to_s_single(abcd: np.ndarray, z0: np.ndarray) -> np.ndarray:
     Cinv = np.ascontiguousarray(Cinv_CinvD[:, :k])
     CinvD = np.ascontiguousarray(Cinv_CinvD[:, k:])
 
-    Z = np.empty((N, N), dtype=np.complex128)
-    Z[:k, :k] = A @ Cinv
-    Z[:k, k:] = A @ Cinv @ D - B  # block form; A@Cinv@D != (A@D)@Cinv unless C,D commute
-    Z[k:, :k] = Cinv
-    Z[k:, k:] = CinvD
-
-    Z0d = np.zeros((N, N), dtype=np.complex128)
-    Z0cd = np.zeros((N, N), dtype=np.complex128)
-    for i in range(N):
-        Z0d[i, i] = z0[i]
-        Z0cd[i, i] = np.conj(z0[i])
+    # M = Z - diag(conj(z0)), applied as an in-place diagonal update instead
+    # of allocating dense (N,N) diag(z0)/diag(conj(z0)) matrices just to
+    # hold N diagonal values -- this kernel runs once per frequency across
+    # `numba.prange` threads, so the saved allocations multiply by Nf.
+    M = np.empty((N, N), dtype=np.complex128)
+    M[:k, :k] = A @ Cinv
+    M[:k, k:] = A @ Cinv @ D - B  # block form; A@Cinv@D != (A@D)@Cinv unless C,D commute
+    M[k:, :k] = Cinv
+    M[k:, k:] = CinvD
 
     G0 = np.real(z0)
     sqrtG0 = np.sqrt(G0)
     inv_sqrtG0 = 1.0 / sqrtG0
 
-    X = np.linalg.solve((Z + Z0d).T, (Z - Z0cd).T)
+    for i in range(N):
+        M[i, i] -= np.conj(z0[i])  # M is now Z - diag(conj(z0))
+    P = M.copy()
+    for i in range(N):
+        P[i, i] += 2.0 * G0[i]  # P = M + diag(z0 + conj(z0)) = Z + diag(z0)
+
+    X = np.linalg.solve(P.T, M.T)
     S0 = X.T
 
     S = np.empty((N, N), dtype=np.complex128)
@@ -142,6 +203,29 @@ class NumbaBackend(Backend):
     """
 
     name = "numba"
+
+    def single_mode_matrix(self, Zs: np.ndarray, Yg: np.ndarray) -> np.ndarray:
+        return _single_mode_matrix_batch(np.ascontiguousarray(Zs), np.ascontiguousarray(Yg))
+
+    def symmetric_single_mode_matrix(self, Zs: np.ndarray, Yg: np.ndarray) -> np.ndarray:
+        return _symmetric_single_mode_matrix_batch(
+            np.ascontiguousarray(Zs), np.ascontiguousarray(Yg)
+        )
+
+    def single_mode_matrix_grid(self, cells: list, topology: str) -> np.ndarray:
+        """
+        Fused cascade-wide build: the whole (Nf, Ncells) loop compiles to
+        one kernel (single dispatch, vs Ncells separate calls from Python
+        for the default `Backend.single_mode_matrix_grid`) -- same
+        rationale as `cascade_all` below.
+        """
+        Zs_stack = np.ascontiguousarray(
+            np.stack([cell.Zs_harm_fn for cell in cells], axis=1)
+        )
+        Yg_stack = np.ascontiguousarray(
+            np.stack([cell.Yg_harm_fn for cell in cells], axis=1)
+        )
+        return _single_mode_matrix_grid_batch(Zs_stack, Yg_stack, topology == "L")
 
     def abcd_to_s(self, abcd: np.ndarray, z0: np.ndarray) -> np.ndarray:
         return _abcd_to_s_batch(np.ascontiguousarray(abcd), np.ascontiguousarray(z0))

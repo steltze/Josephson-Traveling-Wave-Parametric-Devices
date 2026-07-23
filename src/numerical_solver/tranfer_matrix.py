@@ -1,33 +1,75 @@
 import numpy as np
 
-def single_mode_matrix(Zs, Yg):
-    # Zs, Yg: (Nf, m, m)
-    Nf, m, _ = Zs.shape
-    I = np.broadcast_to(np.eye(m, dtype=complex), (Nf, m, m))
-    top = np.concatenate([I, -Zs], axis=-1)
-    bottom = np.concatenate([-Yg, I + Yg @ Zs], axis=-1)
-    return np.concatenate([top, bottom], axis=-2) # (Nf, n, n)
+from backends import Backend, get_backend
 
-def symmetric_single_mode_matrix(Zs, Yg):
-    # Zs, Yg: (Nf, m, m)
-    # Symmetric pi-cell: shunt Yg/2 - series Zs - shunt Yg/2
-    Nf, m, _ = Zs.shape
-    I = np.broadcast_to(np.eye(m, dtype=complex), (Nf, m, m))
-    Yg_half = Yg / 2
-    top = np.concatenate([I + Zs @ Yg_half, -Zs], axis=-1)
-    bottom = np.concatenate([-Yg - Yg_half @ Zs @ Yg_half, I + Yg_half @ Zs], axis=-1)
-    return np.concatenate([top, bottom], axis=-2) # (Nf, n, n)
 
-def single_mode_matrix_grid(cells, topology):
+def _resolve_backend(backend: Backend | str | None) -> Backend:
+    return backend if isinstance(backend, Backend) else get_backend(backend)
 
-    Ncells = len(cells)
-    Nf, m, _ = cells[0].Zs_harm_fn.shape
-    T_grid = np.empty((Nf, Ncells, 2 * m, 2 * m), dtype=complex)
 
-    if topology == "L":
-        for c, cell in enumerate(cells):
-            T_grid[:, c] = single_mode_matrix(cell.Zs_harm_fn, cell.Yg_harm_fn) # (Nf, n, n)
-    else:
-        for c, cell in enumerate(cells):
-            T_grid[:, c] = symmetric_single_mode_matrix(cell.Zs_harm_fn, cell.Yg_harm_fn) # (Nf, n, n)
-    return T_grid # (Nf, Ncells, n, n)
+def single_mode_matrix(Zs, Yg, backend: Backend | str | None = None) -> np.ndarray:
+    """
+    Per-cell ABCD matrix for the "L" (series-then-shunt) topology.
+
+    Parameters
+    ----------
+    Zs, Yg : ndarray, shape (Nf, m, m)
+        Series impedance and shunt admittance harmonic matrices.
+    backend : Backend, backend name, or None
+        Numerical backend to run the kernel on. Defaults to "numpy", or
+        the $TWPA_BACKEND environment variable if set. See
+        `backends.available_backends()`.
+
+    Returns
+    -------
+    ndarray, shape (Nf, 2m, 2m)
+    """
+    return _resolve_backend(backend).single_mode_matrix(
+        np.asarray(Zs, dtype=complex), np.asarray(Yg, dtype=complex)
+    )
+
+
+def symmetric_single_mode_matrix(Zs, Yg, backend: Backend | str | None = None) -> np.ndarray:
+    """
+    Per-cell ABCD matrix for the symmetric "pi" (shunt/2-series-shunt/2) topology.
+
+    Parameters
+    ----------
+    Zs, Yg : ndarray, shape (Nf, m, m)
+        Series impedance and shunt admittance harmonic matrices.
+    backend : Backend, backend name, or None
+        Numerical backend to run the kernel on. Defaults to "numpy", or
+        the $TWPA_BACKEND environment variable if set. See
+        `backends.available_backends()`.
+
+    Returns
+    -------
+    ndarray, shape (Nf, 2m, 2m)
+    """
+    return _resolve_backend(backend).symmetric_single_mode_matrix(
+        np.asarray(Zs, dtype=complex), np.asarray(Yg, dtype=complex)
+    )
+
+
+def single_mode_matrix_grid(cells, topology, backend: Backend | str | None = None) -> np.ndarray:
+    """
+    Build the per-cell, per-frequency ABCD matrix grid for a whole cascade.
+
+    Parameters
+    ----------
+    cells : list of CellImmitance
+        Each cell's `Zs_harm_fn` / `Yg_harm_fn` must already be arrays of
+        shape (Nf, m, m), not callables.
+    topology : "L" or "pi"
+    backend : Backend, backend name, or None
+        Numerical backend to run the kernel on. Defaults to "numpy", or
+        the $TWPA_BACKEND environment variable if set. Backends that fuse
+        the whole cell loop into one compiled kernel (e.g. "numba") avoid
+        Ncells separate per-cell dispatches -- see
+        `Backend.single_mode_matrix_grid`.
+
+    Returns
+    -------
+    ndarray, shape (Nf, Ncells, 2m, 2m)
+    """
+    return _resolve_backend(backend).single_mode_matrix_grid(cells, topology)
