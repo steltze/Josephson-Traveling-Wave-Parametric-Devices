@@ -12,6 +12,7 @@ from simulation import SimulationConfig, Simulation
 from models import JTLDiscrete
 from analysis.checks import check_transfer_matrix_determinant, check_photon_flux_conservation
 from examples.utils import save_all
+from dashboard import Dashboard
 
 log = get_logger(__name__)
 
@@ -82,11 +83,16 @@ def julia_comparison():
     ncell_values = np.linspace(400, 1500, 2, dtype=int)
 
 
+    dashboard_runs = [sim.get_s_matrix(normalize=True).array]
+    dashboard_labels = [f"ε={cfg.epsilon:.3f}"]
+
     fig, ax2 = plt.subplots()
     for i, ncell_n in enumerate(epsilon_values):
         cfg_eps = replace(cfg, epsilon=ncell_n)
         sim_eps = Simulation(JTLDiscrete, cfg_eps, backend="numpy")
         S_ph_eps = sim_eps.get_s_matrix(normalize=True).array
+        dashboard_runs.append(S_ph_eps)
+        dashboard_labels.append(f"ε={ncell_n:.3f}")
 
         T_grid = sim_eps._get_T_grid()
 
@@ -109,4 +115,6 @@ def julia_comparison():
     ax2.grid(True, alpha=0.3)
 
     plt.show()
+
+    Dashboard(dashboard_runs, freqs=cfg.freqs, labels=dashboard_labels, ks_state=cfg.ks_state).run()
 
