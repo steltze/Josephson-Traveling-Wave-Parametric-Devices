@@ -1,4 +1,4 @@
-# Traveling Wave Parametric Amplifier (TWPA) and Converter (TWPC)
+# Traveling Wave Parametric Devices
 
 You need **Python 3.10+** installed. No other tools required.
 
