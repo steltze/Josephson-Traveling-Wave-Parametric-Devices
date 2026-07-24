@@ -72,11 +72,16 @@ class Backend(ABC):
 
         Default implementation: one Python-level dispatch per cell (Nc
         calls total) into `single_mode_matrix` / `symmetric_single_mode_matrix`,
-        each of which handles the full frequency batch at once. A backend
-        whose per-cell overhead is dominated by per-call dispatch rather
-        than by the work itself should override this to fuse the whole
-        cell loop into a single compiled kernel instead (see
-        `Backend.cascade_all`'s docstring for the analogous rationale).
+        each of which handles the full frequency batch at once. Measured
+        faster than folding the cell axis into one (Nf*Ncells, m, m) batched
+        call: stacking cells into a single giant batch trades Nc cheap
+        Python dispatches (each already vectorized over Nf) for one huge
+        matmul with worse cache locality, which loses in practice (~1.5-2x
+        slower, measured at Nc=321). A backend whose per-cell overhead is
+        dominated by per-call dispatch rather than by the work itself
+        should override this to fuse the whole cell loop into a single
+        compiled kernel instead (see `Backend.cascade_all`'s docstring for
+        the analogous rationale).
         """
         Ncells = len(cells)
         Nf, m, _ = cells[0].Zs_harm_fn.shape

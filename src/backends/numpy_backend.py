@@ -55,7 +55,10 @@ class NumpyBackend(Backend):
         # diagonal update instead of materializing it.
         M = np.empty((Nf, N, N), dtype=complex)
         M[:, :k, :k] = A @ Cinv
-        M[:, :k, k:] = A @ Cinv @ D - B  # block form; A@Cinv@D != (A@D)@Cinv unless C,D commute
+        # A@Cinv@D != (A@D)@Cinv unless C,D commute, so this must go through
+        # Cinv first -- but that product is already sitting in M[:,:k,:k],
+        # so reuse it instead of recomputing A@Cinv a second time.
+        M[:, :k, k:] = M[:, :k, :k] @ D - B
         M[:, k:, :k] = Cinv
         M[:, k:, k:] = CinvD
         idx = np.arange(N)

@@ -45,10 +45,10 @@ def two_pump_jtl(cell_topology: str = "pi", backend=None):
         cell_size=10e-6,
         omega_cutoff=2 * 50 / 540e-3,
         omega_j=30 * 2 * np.pi,
-        omega_pump = [6.8 * 2 * np.pi, 5 * 2 * np.pi],
-        epsilon=[0.05, 0.06],
-        v_ratio=[-2.5, -2.5],
-        Kmax=[(0, 1), (0, 1)],
+        omega_pump = [6.8 * 2 * np.pi, 7.5 * 2 * np.pi, 8 * 2 * np.pi],
+        epsilon=[0.05, 0.05, 0.05],
+        v_ratio=[-2.5, -2.5, -2.5],
+        Kmax=[(0, 1), (0, 1), (0, 1)],
         freq_min=1,
         freq_max=14,
         n_freqs=500,
@@ -67,8 +67,8 @@ def two_pump_jtl(cell_topology: str = "pi", backend=None):
     # state index p sits at D + p.
     _, labels = multipump_frequency_grid(0.0, cfg.omega_pump, cfg.Kmax)
     D = len(labels)
-    signal_idx = labels.index((0, 0))
-    idler1_idx = labels.index((0, 1))
+    signal_idx = labels.index((0, 0, 0))
+    idler1_idx = labels.index((0, 1, 0))
     # idler2_idx = labels.index((0, 1))
     # idler3_idx = labels.index((1, 1))
     
