@@ -76,8 +76,9 @@ class JTLDiscreteMultiPump:
 
         if config.disorder:
             rng = np.random.default_rng(config.disorder_seed)
-            lo = 1 - config.disorder_span / 2
-            hi = 1 + config.disorder_span / 2
+            frac = config.disorder_span
+            lo = 1 - frac
+            hi = 1 + frac
             L *= rng.uniform(lo, hi, ncell)
             C *= rng.uniform(lo, hi, ncell)
             Cs_jj *= rng.uniform(lo, hi, ncell)

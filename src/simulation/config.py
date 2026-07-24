@@ -53,7 +53,7 @@ class SimulationConfig:
     disorder : bool
         Add random cell-to-cell parameter disorder.
     disorder_span : float
-        Fractional spread of the uniform disorder distribution.
+        Max disorder as a percentage of L/C (e.g. 5 -> uniform +/-5%).
     disorder_seed : int | None
         RNG seed for reproducibility.
     nramp : int
@@ -90,7 +90,7 @@ class SimulationConfig:
 
     # Disorder
     disorder: bool = False
-    disorder_span: float = 0.01
+    disorder_span: float = 1e-1 # e.g 1%
     disorder_seed: int | None = 42
 
     # Adiabatic ramp (0 = flat)
