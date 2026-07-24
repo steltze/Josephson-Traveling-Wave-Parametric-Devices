@@ -17,10 +17,10 @@ from dashboard import Dashboard
 log = get_logger(__name__)
 
 
-def julia_comparison(dashboard=True):
+def julia_comparison(dashboard=False):
     ks_state = [0, 1]
     M = 1
-    ncell = 320+1
+    ncell = 2000
     cfg = SimulationConfig(
         Z0=50,
         M=M,
@@ -36,10 +36,11 @@ def julia_comparison(dashboard=True):
         * np.pi,  # gap: well in the S parameter from signal to tranmission
         v_ratio=-2.5, # > 0 => co-propagating, < 0 => counter-propagating
         freq_min=1,  # GHz
-        freq_max=14,  # GHz
-        n_freqs=1000,
+        freq_max=12,  # GHz
+        n_freqs = 500,
         disorder=False,
-        nramp=0,
+        nramp=0, # where the peak will be
+        adiabatic_pump=True,
     )
     central_band = 1
     transmitted_band = 3 # central_band + len(cfg.ks_state) 
@@ -51,9 +52,9 @@ def julia_comparison(dashboard=True):
     # epsilon_values = np.linspace(0.03, epsilon_max, 2)
     # ncell_values = np.linspace(400, 1500, 2, dtype=int)
 
-    disorder_values = [False, True]
-    colors = ["blue", "red"]
-    linestyles = ["-", "--"]
+    disorder_values = [0, cfg.ncell//5, cfg.ncell//2]
+    colors = ["blue", "red", "green"]
+    linestyles = ["-", "--", "."]
 
 
     dashboard_runs = []
@@ -61,7 +62,7 @@ def julia_comparison(dashboard=True):
 
     fig, ax2 = plt.subplots()
     for i, disorder in enumerate(disorder_values):
-        cfg_eps = replace(cfg, disorder=disorder)
+        cfg_eps = replace(cfg, nramp=disorder)
         sim_eps = Simulation(JTLDiscrete, cfg_eps, backend="numpy")
         S_ph_eps = sim_eps.get_s_matrix(normalize=True).array
         dashboard_runs.append(S_ph_eps)
@@ -72,13 +73,13 @@ def julia_comparison(dashboard=True):
         _, _ = check_transfer_matrix_determinant(T_grid, tolerance=1e-18)
 
         # for i in range(2*len(ks_state)):
-        for j in [0, 1]:
+        for j in [2]:
             ax2.plot(
                 cfg.freqs,
                 (10*np.log10(np.abs(S_ph_eps) ** 2))[:, j, 0],
                 label=f"S{j+1}1, disorder={disorder:.2f}",
-                color=colors[i],
-                linestyle=linestyles[j % len(linestyles)],
+                # color=colors[i],
+                # linestyle=linestyles[j % len(linestyles)],
             )
 
     ax2.set_xlabel("Frequency (GHz)")

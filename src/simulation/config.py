@@ -59,6 +59,13 @@ class SimulationConfig:
     nramp : int
         Number of cells over which the pump amplitude ramps up/down.
         0 disables the adiabatic envelope.
+    adiabatic_pump : bool
+        If True, `v_pump` is an `ncell`-length ramp instead of a scalar,
+        from `v_pump_ramp_start` to `v_pump_ramp_end` times the nominal
+        pump velocity.
+    v_pump_ramp_start, v_pump_ramp_end : float
+        Endpoints of the `v_pump` ramp (as a fraction of nominal pump
+        velocity), applied when `adiabatic_pump` is True.
     """
 
     # Transfer matrix
@@ -93,8 +100,13 @@ class SimulationConfig:
     disorder_span: float = 1e-1 # e.g 1%
     disorder_seed: int | None = 42
 
-    # Adiabatic ramp (0 = flat)
+    # Adiabatic ramp (0 = flat) for epsilon
     nramp: int = 0
+
+    # Adiabatic pump velocity
+    adiabatic_pump: bool = False
+    v_pump_ramp_start: float = 1.25  # v_pump(cell 0) / nominal v_pump
+    v_pump_ramp_end: float = 0.95    # v_pump(last cell) / nominal v_pump
 
     def __post_init__(self) -> None:
         if self.omega_pump is None:
@@ -172,11 +184,25 @@ class SimulationConfig:
 
     @property
     def v_pump(self) -> float | list[float]:
-        """Pump phase velocity (m/s), or one per pump for a multi-pump config."""
+        """Pump phase velocity (m/s), or one per pump for a multi-pump config.
+
+        If `adiabatic_pump`, each scalar is replaced by an `ncell`-length
+        ramp ranging from `v_pump_ramp_start` to `v_pump_ramp_end` times
+        the nominal velocity.
+        """
+
+        def v_of(vr: float) -> float | np.ndarray:
+            v_nominal = self.v_signal / vr
+            ramp_start, ramp_end = self.v_pump_ramp_start, self.v_pump_ramp_end
+            if not self.adiabatic_pump:
+                return v_nominal
+            return np.linspace(ramp_start * v_nominal, ramp_end * v_nominal, self.ncell)
+
         if isinstance(self.v_ratio, list):
-            return [self.v_signal / vr for vr in self.v_ratio]
-        return self.v_signal / self.v_ratio
-    
+            return [v_of(vr) for vr in self.v_ratio]
+        return v_of(self.v_ratio)
+
+
     @property
     def propagation_direction(self) -> float:
         """Co- or counter-propagating signal and idler."""
