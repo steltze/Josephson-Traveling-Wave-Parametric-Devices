@@ -28,8 +28,8 @@ log = get_logger(__name__)
 
 def _get_port_frequencies(
     omegas: np.ndarray,
-    omega_pump: float,
-    ks_state: list[int],
+    omega_pump,
+    ks_state,
 ) -> np.ndarray:
     """
     Angular frequency assigned to each S-matrix port.
@@ -37,25 +37,43 @@ def _get_port_frequencies(
     Port ordering mirrors the Floquet state vector:
         [mode_k0_L, mode_k1_L, …, mode_k0_R, mode_k1_R, …]
 
+    Parameters
+    ----------
+    omega_pump : float or list of P floats
+        Single-pump: scalar pump frequency, paired with a flat `ks_state`.
+        Multi-pump: list of P pump frequencies, paired with `ks_state`
+        actually being `Kmax` -- per-pump (k_min, k_max) sideband ranges
+        (see models.electrical_elements.multipump_frequency_grid). The
+        tracked state is then the full tensor lattice, D = prod(n_j),
+        n_j = k_max_j - k_min_j + 1, in the same kron flattening order
+        `multipump_frequency_grid` and `JTLDiscreteMultiPump` use.
+    ks_state : list[int] or list[tuple[int, int]]
+        Flat sideband indices (single-pump) or per-pump (k_min, k_max)
+        ranges -- i.e. `Kmax` -- (multi-pump); see `omega_pump` above.
+
     Returns
     -------
-    port_omegas : ndarray, shape (Nf, N)
+    port_omegas : ndarray, shape (Nf, N) -- SIGNED port frequency
+        ω_s + k·ω_pump (single-pump) or ω_s + Σⱼ kⱼ·ω_pj (multi-pump).
+        Signed, not absolute: `eta = sign(port_omegas)` (below) depends on it.
     """
-    n_modes = len(ks_state)
-    N = 2 * n_modes
-    port_omegas = np.empty((len(omegas), N))
-    for i, k in enumerate(ks_state):
-        freq = omegas + k * omega_pump
-        port_omegas[:, i] = freq  # left port
-        port_omegas[:, n_modes + i] = freq  # right port
-    return port_omegas
+    if isinstance(omega_pump, (list, tuple)):
+        from models.electrical_elements import multipump_frequency_grid
+
+        half = np.stack(
+            [multipump_frequency_grid(ws, omega_pump, ks_state)[0] for ws in omegas]
+        )  # (Nf, D) signed
+    else:
+        ks = np.asarray(ks_state)
+        half = omegas[:, None] + ks[None, :] * omega_pump  # (Nf, n_modes) signed
+    return np.concatenate([half, half], axis=1)  # (Nf, N)
 
 
 def check_photon_flux_conservation(
     S_ph: np.ndarray,
     omegas: np.ndarray,
-    omega_pump: float,
-    ks_state: list[int],
+    omega_pump,
+    ks_state,
 ) -> np.ndarray:
     """
     eta-weighted power sum for a photon-flux-normalized S-matrix.
@@ -73,6 +91,13 @@ def check_photon_flux_conservation(
 
         Σᵢ ηᵢ |S_ph[i,j]|²  =  ηⱼ,      ηₖ = sign(ωₖ)
 
+    Works for both single-pump (`omega_pump` a scalar, `ks_state` a flat
+    list of sideband indices) and multi-pump (`omega_pump` a list of P
+    pump frequencies, `ks_state` actually `Kmax` -- per-pump (k_min, k_max)
+    ranges, tracked state the tensor lattice D = prod(n_j)) -- see
+    `_get_port_frequencies`. ηₖ is still just sign of the (now multi-pump)
+    signed port frequency, so the identity is unchanged.
+
     Returns
     -------
     check : (Nf, N) — should equal ηⱼ (±1) for every input port j; deviation
@@ -87,8 +112,8 @@ def check_photon_flux_conservation(
 def check_reflection_vs_transmission(
     S_ph: np.ndarray,
     omegas: np.ndarray,
-    omega_pump: float,
-    ks_state: list[int],
+    omega_pump,
+    ks_state,
     input_port: int,
     tolerance: float = 1e-8,
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -127,8 +152,10 @@ def check_reflection_vs_transmission(
     parametric mode conversion -- use `get_power_flow` for the unbundled
     per-port breakdown when that distinction matters.
     """
-    n_modes = len(ks_state)
     w = _get_port_frequencies(omegas, omega_pump, ks_state)  # (Nf, N)
+    # N//2, not len(ks_state): for multi-pump, ks_state is Kmax (P per-pump
+    # ranges), and len(Kmax) = P != D = N//2 (the tensor-lattice dimension).
+    n_modes = w.shape[1] // 2
     eta = np.sign(w)
     Sabsq = np.abs(S_ph[:, :, input_port]) ** 2  # (Nf, N)
     weighted = Sabsq * eta  # (Nf, N)
@@ -178,8 +205,8 @@ def plot_reflection_vs_transmission(
 def get_power_flow(
     S_ph: np.ndarray,
     omegas: np.ndarray,
-    omega_pump: float,
-    ks_state: list[int],
+    omega_pump,
+    ks_state,
     input_port: int,
 ) -> np.ndarray:
     """
@@ -255,8 +282,8 @@ def check_transfer_matrix_determinant(
 def check_pseudo_unitarity(
     S_ph: np.ndarray,
     omegas: np.ndarray,
-    omega_pump: float,
-    ks_state: list[int],
+    omega_pump,
+    ks_state,
     tolerance: float = 1e-8,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
