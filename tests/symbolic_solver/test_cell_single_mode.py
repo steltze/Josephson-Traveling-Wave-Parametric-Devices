@@ -919,7 +919,7 @@ def compare_abcd_vs_sim():
         freq_max=freq_max,
         n_freqs=n_freqs,
         disorder=False,
-        nramp=0,
+        epsilon_nramp=0,
     )
     sim = Simulation(JTL, cfg)
 

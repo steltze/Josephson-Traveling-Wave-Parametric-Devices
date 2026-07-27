@@ -31,7 +31,7 @@ def compare_gap_bandwidth():
         freq_max=12,
         n_freqs=500,
         disorder=False,
-        nramp=0,
+        epsilon_nramp=0,
     )
 
     # --- discrete: measure bandwidth at -3 dB (|S31|² = 0.5) ---

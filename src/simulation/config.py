@@ -56,7 +56,7 @@ class SimulationConfig:
         Max disorder as a percentage of L/C (e.g. 5 -> uniform +/-5%).
     disorder_seed : int | None
         RNG seed for reproducibility.
-    nramp : int
+    epsilon_nramp : int
         Number of cells over which the pump amplitude ramps up/down.
         0 disables the adiabatic envelope.
     adiabatic_pump : bool
@@ -101,12 +101,12 @@ class SimulationConfig:
     disorder_seed: int | None = 42
 
     # Adiabatic ramp (0 = flat) for epsilon
-    nramp: int = 0
+    epsilon_nramp: int = 0
 
     # Adiabatic pump velocity
     adiabatic_pump: bool = False
-    v_pump_ramp_start: float = 1.25  # v_pump(cell 0) / nominal v_pump
-    v_pump_ramp_end: float = 0.95    # v_pump(last cell) / nominal v_pump
+    v_pump_ramp_start: float = 1.3  # v_pump(cell 0) / nominal v_pump
+    v_pump_ramp_end: float = 0.9    # v_pump(last cell) / nominal v_pump
 
     def __post_init__(self) -> None:
         if self.omega_pump is None:

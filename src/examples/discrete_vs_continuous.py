@@ -32,7 +32,7 @@ def _base_config(**overrides):
         freq_max=14,
         n_freqs=500,  # increase to 5000 to see interesting spikes
         disorder=False,
-        nramp=0,
+        epsilon_nramp=0,
     )
     cfg_kwargs.update(overrides)
     return SimulationConfig(**cfg_kwargs)

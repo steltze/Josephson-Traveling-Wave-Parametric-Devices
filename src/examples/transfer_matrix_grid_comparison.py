@@ -29,7 +29,7 @@ def _base_config(**overrides):
         freq_max=12,
         n_freqs=500,
         disorder=False,
-        nramp=0,
+        epsilon_nramp=0,
         ncell=321,
     )
     cfg_kwargs.update(overrides)

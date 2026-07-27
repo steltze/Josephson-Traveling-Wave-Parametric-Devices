@@ -23,9 +23,13 @@ def band_coupling_phased(n: int, offset: int, theta: float) -> np.ndarray:
 
 def _is_matrix(value: np.ndarray) -> bool:
     """True for a genuine (..., n, n) sideband-coupling matrix, as opposed
-    to a per-sideband array of independent scalar values — which, for a
-    batched (Nf, n) grid, also has ndim 2 but isn't square in general."""
-    return value.ndim >= 2 and value.shape[-1] == value.shape[-2]
+    to a per-sideband array of independent scalar values. Squareness alone
+    isn't enough: a per-sideband array on a batched (Nf, n) grid also has
+    ndim 2, and is square too whenever Nf happens to equal n. A genuine
+    coupling matrix carries the sideband axis *in addition to* the Nf
+    batch axis (Nf, n, n) -- ndim > 2, not just square, is what actually
+    distinguishes the two."""
+    return value.ndim == 3 and value.shape[-1] == value.shape[-2]
 
 
 def _invert(value: np.ndarray) -> np.ndarray:
@@ -154,8 +158,12 @@ class ModulatedInductor(Component):
         # done via broadcasting instead of materializing a mostly-zero
         # (Nf,n,n) diagonal matrix and paying an O(Nf n^3) batched matmul
         # for what's really an O(Nf n^2) elementwise scale.
-        Z = 1j * omega[:, :, None] * (self.L0 * L)[None, :, :]
-        return Z[0] if Z.shape[0] == 1 else Z
+        #
+        # Always keep the batch axis, even when Nf == 1: squeezing it away
+        # would make this (n, n) result indistinguishable in ndim from the
+        # elementwise (Nf, n) per-sideband arrays plain components return,
+        # which is exactly what `_is_matrix` relies on to tell the two apart.
+        return 1j * omega[:, :, None] * (self.L0 * L)[None, :, :]
 
 
 class _Combination(Component):
@@ -287,8 +295,10 @@ class ModulatedInductorMultiPump(Component):
         # for what's really an O(Nf D^2) elementwise scale. D grows
         # multiplicatively with pump count, so this is the dominant cost
         # for multi-pump cells.
-        Z = 1j * omega[:, :, None] * (self.L0 * L)[None, :, :]  # (Nf, D, D)
-        return Z[0] if Z.shape[0] == 1 else Z
+        #
+        # Always keep the batch axis, even when Nf == 1 -- see the matching
+        # comment in ModulatedInductor.impedance.
+        return 1j * omega[:, :, None] * (self.L0 * L)[None, :, :]  # (Nf, D, D)
 
 
 def n_sidebands_from_Kmax(Kmax) -> list[int]:

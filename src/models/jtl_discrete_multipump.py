@@ -83,11 +83,11 @@ class JTLDiscreteMultiPump:
             C *= rng.uniform(lo, hi, ncell)
             Cs_jj *= rng.uniform(lo, hi, ncell)
 
-        if config.nramp > 0:
-            alpha = 4.0 / config.nramp
-            ramp_up = 0.5 * (1 + np.tanh(alpha * (ns - config.nramp / 2)))
+        if config.epsilon_nramp > 0:
+            alpha = 4.0 / config.epsilon_nramp
+            ramp_up = 0.5 * (1 + np.tanh(alpha * (ns - config.epsilon_nramp / 2)))
             ramp_down = 0.5 * (
-                1 + np.tanh(alpha * ((ncell - 1 - config.nramp / 2) - ns))
+                1 + np.tanh(alpha * ((ncell - 1 - config.epsilon_nramp / 2) - ns))
             )
             profile = ramp_up * ramp_down
         else:
@@ -146,9 +146,6 @@ class JTLDiscreteMultiPump:
 
             cells.append(
                 CellImmitance(
-                    theta=_th,
-                    Zs0_fn=lambda w, L=_L, wji=_wj, f=first: 0.0,
-                    Yg0_fn=lambda w, cap=Capacitor(_C): cap.admittance(w),
                     Zs_harm_fn=Zs_harm_arr,
                     Yg_harm_fn=Yg_harm_arr,
                 )

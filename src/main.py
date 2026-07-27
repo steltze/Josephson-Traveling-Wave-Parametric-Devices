@@ -40,7 +40,7 @@ def main():
         freq_max=12,
         n_freqs=500,
         disorder=False,
-        nramp=0.0,
+        epsilon_nramp=0.0,
     )
 
     log.info("omega_pump = %.3f GHz", cfg.omega_pump / (2 * np.pi * 1e9))

@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 
 from models.cell import CellImmitance
-from models.electrical_elements import Component, ModulatedInductor, Capacitor
+from models.electrical_elements import Component, ModulatedInductor, Capacitor, Inductor
 
 
 class JTLDiscrete:
@@ -60,11 +60,11 @@ class JTLDiscrete:
             C *= rng.uniform(lo, hi, ncell)
             Cs_jj *= rng.uniform(lo, hi, ncell)
 
-        if config.nramp > 0:
-            alpha = 4.0 / config.nramp
-            ramp_up = 0.5 * (1 + np.tanh(alpha * (ns - config.nramp / 2)))
+        if config.epsilon_nramp > 0:
+            alpha = 4.0 / config.epsilon_nramp
+            ramp_up = 0.5 * (1 + np.tanh(alpha * (ns - config.epsilon_nramp / 2)))
             ramp_down = 0.5 * (
-                1 + np.tanh(alpha * ((ncell - 1 - config.nramp / 2) - ns))
+                1 + np.tanh(alpha * ((ncell - 1 - config.epsilon_nramp / 2) - ns))
             )
             profile = ramp_up * ramp_down
         else:
@@ -107,13 +107,11 @@ class JTLDiscrete:
 
             # Shunt-to-ground capacitor: unmodulated, so it doesn't couple
             # sidebands -- its harmonic matrix is diagonal.
-            Yg_harm_arr = Capacitor(_C).admittance_matrix(omega_sb)  # (Nf, n, n)
+            Yg = Component.parallel(Capacitor(_C), Component.series(Capacitor(_C), Inductor(_L)))
+            Yg_harm_arr = Yg.admittance_matrix(omega_sb)  # (Nf, n, n)
 
             cells.append(
                 CellImmitance(
-                    theta=0,
-                    Zs0_fn=lambda w, L=_L, wji=_wj, f=first: 0.0,
-                    Yg0_fn=lambda w, cap=Capacitor(_C): cap.admittance(w),
                     Zs_harm_fn=Zs_harm_arr,
                     Yg_harm_fn=Yg_harm_arr,
                 )

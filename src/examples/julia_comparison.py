@@ -39,7 +39,7 @@ def julia_comparison(dashboard=False):
         freq_max=12,  # GHz
         n_freqs = 500,
         disorder=False,
-        nramp=0, # where the peak will be
+        epsilon_nramp=0, # where the peak will be
         adiabatic_pump=True,
     )
     central_band = 1
@@ -52,7 +52,7 @@ def julia_comparison(dashboard=False):
     # epsilon_values = np.linspace(0.03, epsilon_max, 2)
     # ncell_values = np.linspace(400, 1500, 2, dtype=int)
 
-    disorder_values = [0, cfg.ncell//5, cfg.ncell//2]
+    epsilon_ramp_values = [0, cfg.ncell//5, cfg.ncell//2]
     colors = ["blue", "red", "green"]
     linestyles = ["-", "--", "."]
 
@@ -61,32 +61,34 @@ def julia_comparison(dashboard=False):
     dashboard_labels = []
 
     fig, ax2 = plt.subplots()
-    for i, disorder in enumerate(disorder_values):
-        cfg_eps = replace(cfg, nramp=disorder)
+    for i, epsilon_ramp in enumerate(epsilon_ramp_values):
+        cfg_eps = replace(cfg, epsilon_nramp=epsilon_ramp)
         sim_eps = Simulation(JTLDiscrete, cfg_eps, backend="numpy")
         S_ph_eps = sim_eps.get_s_matrix(normalize=True).array
         dashboard_runs.append(S_ph_eps)
-        dashboard_labels.append(f"Disorder={disorder:.3f}")
+        dashboard_labels.append(rf"$\epsilon_{{\mathrm{{envelope}}}}={epsilon_ramp:.3f}$")
 
         T_grid = sim_eps._get_T_grid()
 
-        _, _ = check_transfer_matrix_determinant(T_grid, tolerance=1e-18)
+        _, _ = check_transfer_matrix_determinant(T_grid)
 
         # for i in range(2*len(ks_state)):
         for j in [2]:
             ax2.plot(
                 cfg.freqs,
                 (10*np.log10(np.abs(S_ph_eps) ** 2))[:, j, 0],
-                label=f"S{j+1}1, disorder={disorder:.2f}",
+                label=rf"$\epsilon_{{\mathrm{{envelope}}}}={epsilon_ramp}$",
                 # color=colors[i],
                 # linestyle=linestyles[j % len(linestyles)],
             )
 
     ax2.set_xlabel("Frequency (GHz)")
     ax2.set_ylabel(r"$|S_{i," + str(central_band) + r"}|^2$ (dB)")
-    ax2.set_title("Signal transmission vs. modulation depth")
+    ax2.set_title(f"Signal transmission vs. modulation depth, ncells = {cfg.ncell}")
     ax2.legend()
     ax2.grid(True, alpha=0.3)
+
+    sim_eps.plot_dispersion_relation()
 
     plt.show()
 

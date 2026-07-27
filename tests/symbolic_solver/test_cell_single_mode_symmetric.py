@@ -320,7 +320,7 @@ def compare_manual_squid_vs_solver():
         freq_max=12,
         n_freqs=500,
         disorder=False,
-        nramp=0,
+        epsilon_nramp=0,
     )
     signal_port = 0
 

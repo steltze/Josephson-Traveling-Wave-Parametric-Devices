@@ -46,7 +46,7 @@ def compare_cell_topologies():
         freq_max=12,
         n_freqs=500,
         disorder=False,
-        nramp=0,
+        epsilon_nramp=0,
     )
     signal_port, idler_port = 0, 1  # 1-based: (signal in), (idler out)
 

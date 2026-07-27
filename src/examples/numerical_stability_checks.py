@@ -52,7 +52,7 @@ def numerical_stability_checks(backend: str = "numpy"):
         freq_max=7  ,
         n_freqs=100,
         disorder=False,
-        nramp=0.0,
+        epsilon_nramp=0.0,
     )
     log.info(
         "ncell=%d, epsilon=%.3f, omega_pump=%.3f GHz",

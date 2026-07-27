@@ -47,7 +47,7 @@ def compare_dispersion_relations():
         freq_max=freq_max_ghz,
         n_freqs=1000,
         disorder=False,
-        nramp=0,
+        epsilon_nramp=0,
     )
 
     # --- discrete: same as plot_dispersion_relation — use interior (middle) cell ---
