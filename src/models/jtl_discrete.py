@@ -107,7 +107,7 @@ class JTLDiscrete:
 
             # Shunt-to-ground capacitor: unmodulated, so it doesn't couple
             # sidebands -- its harmonic matrix is diagonal.
-            Yg = Component.parallel(Capacitor(_C), Component.series(Capacitor(_C), Inductor(_L)))
+            Yg = Capacitor(_C)
             Yg_harm_arr = Yg.admittance_matrix(omega_sb)  # (Nf, n, n)
 
             cells.append(
