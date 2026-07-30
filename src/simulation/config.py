@@ -66,6 +66,20 @@ class SimulationConfig:
     v_pump_ramp_start, v_pump_ramp_end : float
         Endpoints of the `v_pump` ramp (as a fraction of nominal pump
         velocity), applied when `adiabatic_pump` is True.
+    v_pump_ramp_power : float
+        Shape exponent for the ramp's cell-index axis. 1 = linear; <1
+        makes v_pump fall faster early (levelling off later); >1 makes
+        it fall faster late (staying near ramp_start longer first).
+    omega_cutoff_slot_mode : float
+        Slot-line mode cutoff angular frequency (rad/GHz) -- sets the slot
+        line's own per-cell Ls, Co the same way `omega_cutoff` sets the
+        main JTL's L, C. See models.jtl_discrete_slot_mode.JTLDiscreteSlotMode.
+    omega_cutoff_coupling : float
+        Cutoff angular frequency (rad/GHz) for the main-line/slot-line
+        coupling capacitor Ci, using the same L-C-ladder formula as
+        `omega_cutoff` / `omega_cutoff_slot_mode`. Independent of both --
+        it sets how strongly the two lines couple, not how either is
+        detuned, so sweep it separately from `omega_cutoff_slot_mode`.
     """
 
     # Transfer matrix
@@ -105,8 +119,14 @@ class SimulationConfig:
 
     # Adiabatic pump velocity
     adiabatic_pump: bool = False
-    v_pump_ramp_start: float = 1.3  # v_pump(cell 0) / nominal v_pump
-    v_pump_ramp_end: float = 0.9    # v_pump(last cell) / nominal v_pump
+    v_pump_ramp_start: float = 1.5  # v_pump(cell 0) / nominal v_pump
+    v_pump_ramp_end: float = 0.9  # v_pump(last cell) / nominal v_pump
+    v_pump_ramp_power: float = 3.0  # <1 falls faster early, >1 falls faster late
+    v_pump_ramp_linear_floor: float = 0.4  # blend-in of plain-linear ramp (0-1)
+
+    # Circuit frequencies (rad/GHz)
+    omega_cutoff_slot_mode: float = 50 * 2 * np.pi
+    omega_cutoff_coupling: float = 50 * 2 * np.pi
 
     def __post_init__(self) -> None:
         if self.omega_pump is None:
@@ -196,7 +216,22 @@ class SimulationConfig:
             ramp_start, ramp_end = self.v_pump_ramp_start, self.v_pump_ramp_end
             if not self.adiabatic_pump:
                 return v_nominal
-            return np.linspace(ramp_start * v_nominal, ramp_end * v_nominal, self.ncell)
+            # p < 1 front-loads the drop (falls fast, then levels off);
+            # p > 1 back-loads it (stays near ramp_start, then falls fast).
+            # A pure power law has zero slope at the end it "hugs" (t=0 for
+            # p>1), which piles many cells onto ~the same v_pump there --
+            # a sharp, narrow spike rather than part of the flat floor.
+            # Blending in some plain-linear ramp floors that slope so the
+            # end spreads into the same flat floor as the rest of the gap.
+            t = np.linspace(0, 1, self.ncell)
+            x = t ** self.v_pump_ramp_power
+            floor = self.v_pump_ramp_linear_floor
+            x = (1 - floor) * x + floor * t
+            # import matplotlib.pyplot as plt
+            # plt.plot(t, x)
+            # plt.show()
+            # exit()
+            return ramp_start * v_nominal + (ramp_end - ramp_start) * v_nominal * x
 
         if isinstance(self.v_ratio, list):
             return [v_of(vr) for vr in self.v_ratio]

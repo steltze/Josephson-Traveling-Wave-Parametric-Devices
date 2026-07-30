@@ -54,6 +54,34 @@ class Backend(ABC):
         ndarray, complex, shape (Nf, 2m, 2m)
         """
 
+    @abstractmethod
+    def slot_mode_matrix(
+        self,
+        Zs: np.ndarray,
+        Yg: np.ndarray,
+        Zs_slot: np.ndarray,
+        Yg_slot: np.ndarray,
+        Yi_coupling: np.ndarray,
+    ) -> np.ndarray:
+        """
+        Per-cell ABCD matrix for the asymmetric slot-mode topology.
+
+        State per cell: x = [V', V, I_s, I] (each an m-vector of harmonics).
+
+        Parameters
+        ----------
+        Zs, Yg : ndarray, complex, shape (Nf, m, m)
+            Series impedance and shunt admittance harmonic matrices, as in
+            `single_mode_matrix`.
+        Zs_slot, Yg_slot, Yi_coupling : ndarray, complex, shape (Nf, m, m)
+            Slot-line series impedance, slot shunt admittance, and
+            slot-to-signal coupling admittance harmonic matrices.
+
+        Returns
+        -------
+        ndarray, complex, shape (Nf, 4m, 4m)
+        """
+
     def single_mode_matrix_grid(self, cells: list, topology: str) -> np.ndarray:
         """
         Build the per-cell, per-frequency ABCD matrix grid for a whole cascade.
@@ -63,28 +91,46 @@ class Backend(ABC):
         cells : list of CellImmitance
             Each cell's `Zs_harm_fn` / `Yg_harm_fn` must already be arrays
             of shape (Nf, m, m) (the harmonic impedance/admittance
-            matrices), not callables.
+            matrices), not callables. If `Zs_slot_fn` is set (slot-mode
+            cells, e.g. from `JTLDiscreteSlotMode`), `Yg_slot_fn` /
+            `Yi_slot_coupling_fn` must be set too, with the same shape.
         topology : "L" or "pi"
+            Ignored for slot-mode cells -- `slot_mode_matrix` doesn't have
+            an L/pi variant, so it's used as-is whenever cells carry slot
+            fields.
 
         Returns
         -------
-        ndarray, complex, shape (Nf, Ncells, 2m, 2m)
+        ndarray, complex, shape (Nf, Ncells, 2m, 2m), or (Nf, Ncells, 4m, 4m)
+        for slot-mode cells.
 
         Default implementation: one Python-level dispatch per cell (Nc
-        calls total) into `single_mode_matrix` / `symmetric_single_mode_matrix`,
-        each of which handles the full frequency batch at once. Measured
-        faster than folding the cell axis into one (Nf*Ncells, m, m) batched
-        call: stacking cells into a single giant batch trades Nc cheap
-        Python dispatches (each already vectorized over Nf) for one huge
-        matmul with worse cache locality, which loses in practice (~1.5-2x
-        slower, measured at Nc=321). A backend whose per-cell overhead is
-        dominated by per-call dispatch rather than by the work itself
-        should override this to fuse the whole cell loop into a single
-        compiled kernel instead (see `Backend.cascade_all`'s docstring for
-        the analogous rationale).
+        calls total) into `single_mode_matrix` / `symmetric_single_mode_matrix`
+        / `slot_mode_matrix`, each of which handles the full frequency batch
+        at once. Measured faster than folding the cell axis into one
+        (Nf*Ncells, m, m) batched call: stacking cells into a single giant
+        batch trades Nc cheap Python dispatches (each already vectorized
+        over Nf) for one huge matmul with worse cache locality, which loses
+        in practice (~1.5-2x slower, measured at Nc=321). A backend whose
+        per-cell overhead is dominated by per-call dispatch rather than by
+        the work itself should override this to fuse the whole cell loop
+        into a single compiled kernel instead (see `Backend.cascade_all`'s
+        docstring for the analogous rationale).
         """
         Ncells = len(cells)
         Nf, m, _ = cells[0].Zs_harm_fn.shape
+        if cells[0].Zs_slot_fn is not None:
+            T_grid = np.empty((Nf, Ncells, 4 * m, 4 * m), dtype=complex)
+            for c, cell in enumerate(cells):
+                T_grid[:, c] = self.slot_mode_matrix(
+                    cell.Zs_harm_fn,
+                    cell.Yg_harm_fn,
+                    cell.Zs_slot_fn,
+                    cell.Yg_slot_fn,
+                    cell.Yi_slot_coupling_fn,
+                )
+            return T_grid
+
         T_grid = np.empty((Nf, Ncells, 2 * m, 2 * m), dtype=complex)
         fn = self.single_mode_matrix if topology == "L" else self.symmetric_single_mode_matrix
         for c, cell in enumerate(cells):

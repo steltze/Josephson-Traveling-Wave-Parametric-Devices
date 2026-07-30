@@ -159,11 +159,32 @@ class Simulation:
                     port_omegas_half = np.abs(np.stack([
                         multipump_frequency_grid(ws, self._cfg.omega_pump, self._cfg.Kmax)[0]
                         for ws in self._cfg.omegas
-                    ]))  # (Nf, N//2)
+                    ]))  # (Nf, n_half)
                 else:
                     ks = np.asarray(self._cfg.ks_state)
-                    port_omegas_half = np.abs(self._cfg.omegas[:, None] + ks[None, :] * self._cfg.omega_pump)  # (Nf, N//2)
-                port_omegas = np.concatenate([port_omegas_half, port_omegas_half], axis=1)  # (Nf, N)
+                    port_omegas_half = np.abs(self._cfg.omegas[:, None] + ks[None, :] * self._cfg.omega_pump)  # (Nf, n_half)
+
+                # Ordinary cascades have N = 2*n_half ports (n_half tracked
+                # sidebands x 2 physical ends). Slot-mode cascades (extra
+                # internal [V', I_s] conductor -- see JTLDiscreteSlotMode)
+                # interleave a second conductor at each end that carries the
+                # *same* Floquet sideband frequencies, so N = 4*n_half =
+                # 2*(2*n_half): each end's port block is [slot(n_half),
+                # main(n_half)], both weighted from the same port_omegas_half.
+                # blocks_per_side generalizes this instead of hardcoding 1x
+                # or 2x, so it stays correct if more coupled conductors are
+                # added later.
+                N = self._S_matrix.array.shape[-1]
+                n_half = port_omegas_half.shape[-1]
+                blocks_per_side, remainder = divmod(N, 2 * n_half)
+                if remainder != 0:
+                    raise ValueError(
+                        f"S-matrix has {N} ports, not a multiple of "
+                        f"2*{n_half} tracked sideband frequencies -- can't "
+                        f"build the photon-flux weight vector."
+                    )
+                port_omegas_one_side = np.tile(port_omegas_half, (1, blocks_per_side))  # (Nf, N//2)
+                port_omegas = np.concatenate([port_omegas_one_side, port_omegas_one_side], axis=1)  # (Nf, N)
                 weights = 1 / np.sqrt(port_omegas)
                 S_ph = self._S_matrix.array / (weights[:, None, :] / weights[:, :, None])
                 self._S_matrix = SMatrix(S_ph, self._cfg.Z0)

@@ -71,6 +71,79 @@ def _single_mode_matrix_grid_batch(Zs_stack: np.ndarray, Yg_stack: np.ndarray, i
 
 
 @numba.njit(cache=True)
+def _slot_mode_matrix_single(
+    Zs: np.ndarray,
+    Yg: np.ndarray,
+    Zs_slot: np.ndarray,
+    Yg_slot: np.ndarray,
+    Yi_coupling: np.ndarray,
+) -> np.ndarray:
+    m = Zs.shape[0]
+    I = np.eye(m, dtype=np.complex128)
+    Zeros = np.zeros((m, m), dtype=np.complex128)
+    T = np.empty((4 * m, 4 * m), dtype=np.complex128)
+    # ---- row 1 : V'_n = V'_{n+1} - Zs_slot @ I_s_{n+1} ----
+    T[0 * m:1 * m, 0 * m:1 * m] = I
+    T[0 * m:1 * m, 1 * m:2 * m] = Zeros
+    T[0 * m:1 * m, 2 * m:3 * m] = -Zs_slot
+    T[0 * m:1 * m, 3 * m:4 * m] = Zeros
+    # ---- row 2 : V_n = V_{n+1} - Zs @ I_{n+1} ----
+    T[1 * m:2 * m, 0 * m:1 * m] = Zeros
+    T[1 * m:2 * m, 1 * m:2 * m] = I
+    T[1 * m:2 * m, 2 * m:3 * m] = Zeros
+    T[1 * m:2 * m, 3 * m:4 * m] = -Zs
+    # ---- row 3 : I_s update (KCL at the slot node) ----
+    T[2 * m:3 * m, 0 * m:1 * m] = -(Yg_slot + Yi_coupling)
+    T[2 * m:3 * m, 1 * m:2 * m] = Yi_coupling
+    T[2 * m:3 * m, 2 * m:3 * m] = I + (Yg_slot + Yi_coupling) @ Zs_slot
+    T[2 * m:3 * m, 3 * m:4 * m] = -Yi_coupling @ Zs
+    # ---- row 4 : I update (KCL at the main node) ----
+    T[3 * m:4 * m, 0 * m:1 * m] = Yi_coupling
+    T[3 * m:4 * m, 1 * m:2 * m] = -(Yg + Yi_coupling)
+    T[3 * m:4 * m, 2 * m:3 * m] = -Yi_coupling @ Zs_slot
+    T[3 * m:4 * m, 3 * m:4 * m] = I + (Yg + Yi_coupling) @ Zs
+    return T
+
+
+@numba.njit(parallel=True, cache=True)
+def _slot_mode_matrix_batch(
+    Zs: np.ndarray,
+    Yg: np.ndarray,
+    Zs_slot: np.ndarray,
+    Yg_slot: np.ndarray,
+    Yi_coupling: np.ndarray,
+) -> np.ndarray:
+    Nf, m, _ = Zs.shape
+    T = np.empty((Nf, 4 * m, 4 * m), dtype=np.complex128)
+    for f in numba.prange(Nf):
+        T[f] = _slot_mode_matrix_single(Zs[f], Yg[f], Zs_slot[f], Yg_slot[f], Yi_coupling[f])
+    return T
+
+
+@numba.njit(parallel=True, cache=True)
+def _slot_mode_matrix_grid_batch(
+    Zs_stack: np.ndarray,
+    Yg_stack: np.ndarray,
+    Zs_slot_stack: np.ndarray,
+    Yg_slot_stack: np.ndarray,
+    Yi_coupling_stack: np.ndarray,
+) -> np.ndarray:
+    """Fused over both frequency and cell axes -- see `NumbaBackend.single_mode_matrix_grid`."""
+    Nf, Nc, m, _ = Zs_stack.shape
+    T = np.empty((Nf, Nc, 4 * m, 4 * m), dtype=np.complex128)
+    for f in numba.prange(Nf):
+        for c in range(Nc):
+            T[f, c] = _slot_mode_matrix_single(
+                Zs_stack[f, c],
+                Yg_stack[f, c],
+                Zs_slot_stack[f, c],
+                Yg_slot_stack[f, c],
+                Yi_coupling_stack[f, c],
+            )
+    return T
+
+
+@numba.njit(cache=True)
 def _abcd_to_s_single(abcd: np.ndarray, z0: np.ndarray) -> np.ndarray:
     N = abcd.shape[0]
     k = N // 2
@@ -212,6 +285,22 @@ class NumbaBackend(Backend):
             np.ascontiguousarray(Zs), np.ascontiguousarray(Yg)
         )
 
+    def slot_mode_matrix(
+        self,
+        Zs: np.ndarray,
+        Yg: np.ndarray,
+        Zs_slot: np.ndarray,
+        Yg_slot: np.ndarray,
+        Yi_coupling: np.ndarray,
+    ) -> np.ndarray:
+        return _slot_mode_matrix_batch(
+            np.ascontiguousarray(Zs),
+            np.ascontiguousarray(Yg),
+            np.ascontiguousarray(Zs_slot),
+            np.ascontiguousarray(Yg_slot),
+            np.ascontiguousarray(Yi_coupling),
+        )
+
     def single_mode_matrix_grid(self, cells: list, topology: str) -> np.ndarray:
         """
         Fused cascade-wide build: the whole (Nf, Ncells) loop compiles to
@@ -219,6 +308,26 @@ class NumbaBackend(Backend):
         for the default `Backend.single_mode_matrix_grid`) -- same
         rationale as `cascade_all` below.
         """
+        if cells[0].Zs_slot_fn is not None:
+            Zs_slot_stack = np.ascontiguousarray(
+                np.stack([cell.Zs_slot_fn for cell in cells], axis=1)
+            )
+            Yg_slot_stack = np.ascontiguousarray(
+                np.stack([cell.Yg_slot_fn for cell in cells], axis=1)
+            )
+            Yi_coupling_stack = np.ascontiguousarray(
+                np.stack([cell.Yi_slot_coupling_fn for cell in cells], axis=1)
+            )
+            Zs_stack = np.ascontiguousarray(
+                np.stack([cell.Zs_harm_fn for cell in cells], axis=1)
+            )
+            Yg_stack = np.ascontiguousarray(
+                np.stack([cell.Yg_harm_fn for cell in cells], axis=1)
+            )
+            return _slot_mode_matrix_grid_batch(
+                Zs_stack, Yg_stack, Zs_slot_stack, Yg_slot_stack, Yi_coupling_stack
+            )
+
         Zs_stack = np.ascontiguousarray(
             np.stack([cell.Zs_harm_fn for cell in cells], axis=1)
         )

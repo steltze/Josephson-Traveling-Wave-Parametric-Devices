@@ -35,6 +35,60 @@ class NumpyBackend(Backend):
         T[:, m:, m:] = I + Yg_half @ Zs
         return T
 
+    def slot_mode_matrix(self, Zs: np.ndarray, Yg: np.ndarray, Zs_slot: np.ndarray, Yg_slot: np.ndarray, Yi_coupling: np.ndarray) -> np.ndarray:
+        """
+        Asymmetric slot-mode cell: main JTL line (series Zs, shunt-to-ground
+        Yg) running alongside a slot line (series Zs_slot, shunt-to-ground
+        Yg_slot), the two coupled node-to-node by a shunt admittance
+        Yi_coupling between them.
+
+        State per cell: x = [V', V, I_s, I] (each an m-vector of harmonics),
+        V'/I_s the slot line and V/I the main line. Current sign convention
+        matches `single_mode_matrix`: I_n (I_s,n) is the current flowing
+        into cell n from the n+1 side, so setting Yi_coupling = 0 collapses
+        rows 1&3 and 2&4 each to a plain, independent `single_mode_matrix`
+        L-cell (Zs_slot,Yg_slot) / (Zs,Yg).
+
+        Derivation (KVL on each series branch, then KCL at each shunt node,
+        substituting V'_{n+1}, V_{n+1} back out via the KVL rows so every
+        row is expressed in x_{n+1} alone) gives det(T) = 1 exactly for any
+        reactive Zs, Zs_slot, Yg, Yg_slot, Yi_coupling, as required for a
+        lossless reciprocal cell.
+
+        Cell size: 4m x 4m, batched over Nf frequencies.
+
+        Parameters
+        ----------
+        Zs, Yg, Zs_slot, Yg_slot, Yi_coupling : ndarray, complex, shape (Nf, m, m)
+        """
+        Nf, m, _ = Zs.shape
+        I = np.eye(m, dtype=complex)
+        T = np.empty((Nf, 4 * m, 4 * m), dtype=complex)
+        Zeros = np.zeros((m, m), dtype=complex)
+
+        # ---- row 1 : V'_n = V'_{n+1} - Zs_slot @ I_s_{n+1} ----
+        T[:, 0*m:1*m, 0*m:1*m] = I
+        T[:, 0*m:1*m, 1*m:2*m] = Zeros
+        T[:, 0*m:1*m, 2*m:3*m] = -Zs_slot
+        T[:, 0*m:1*m, 3*m:4*m] = Zeros
+        # ---- row 2 : V_n = V_{n+1} - Zs @ I_{n+1} ----
+        T[:, 1*m:2*m, 0*m:1*m] = Zeros
+        T[:, 1*m:2*m, 1*m:2*m] = I
+        T[:, 1*m:2*m, 2*m:3*m] = Zeros
+        T[:, 1*m:2*m, 3*m:4*m] = -Zs
+        # ---- row 3 : I_s update (KCL at the slot node) ----
+        T[:, 2*m:3*m, 0*m:1*m] = -(Yg_slot + Yi_coupling)
+        T[:, 2*m:3*m, 1*m:2*m] = Yi_coupling
+        T[:, 2*m:3*m, 2*m:3*m] = I + (Yg_slot + Yi_coupling) @ Zs_slot
+        T[:, 2*m:3*m, 3*m:4*m] = -Yi_coupling @ Zs
+        # ---- row 4 : I update (KCL at the main node) ----
+        T[:, 3*m:4*m, 0*m:1*m] = Yi_coupling
+        T[:, 3*m:4*m, 1*m:2*m] = -(Yg + Yi_coupling)
+        T[:, 3*m:4*m, 2*m:3*m] = -Yi_coupling @ Zs_slot
+        T[:, 3*m:4*m, 3*m:4*m] = I + (Yg + Yi_coupling) @ Zs
+        return T
+
+
     def abcd_to_s(self, abcd: np.ndarray, z0: np.ndarray) -> np.ndarray:
         Nf, N, _ = abcd.shape
         k = N // 2

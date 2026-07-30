@@ -6,7 +6,7 @@ from models.cell import CellImmitance
 from models.electrical_elements import Component, ModulatedInductor, Capacitor, Inductor
 
 
-class JTLDiscrete:
+class JTLDiscreteSlotMode:
     """
     Factory for Josephson Transmission Line unit cells.
     """
@@ -45,10 +45,10 @@ class JTLDiscrete:
 
         ZR = config.Z0 * np.ones(ncell)
  
-        L = ZR / config.omega_cutoff * 2
-        C = 2 * 1.0 / (config.omega_cutoff * ZR)
+        L_jtl = ZR / config.omega_cutoff * 2
+        C_jtl = 2 * 1.0 / (config.omega_cutoff * ZR)
         Cs_jj = 1.0 / (
-            config.omega_j**2 * L
+            config.omega_j**2 * L_jtl
         )  # junction self-capacitance (RH) / series cap correction (LH)
 
         if config.disorder:
@@ -56,8 +56,8 @@ class JTLDiscrete:
             frac = config.disorder_span
             lo = 1 - frac
             hi = 1 + frac
-            L *= rng.uniform(lo, hi, ncell)
-            C *= rng.uniform(lo, hi, ncell)
+            L_jtl *= rng.uniform(lo, hi, ncell)
+            C_jtl *= rng.uniform(lo, hi, ncell)
             Cs_jj *= rng.uniform(lo, hi, ncell)
 
         if config.epsilon_nramp > 0:
@@ -70,56 +70,30 @@ class JTLDiscrete:
         else:
             profile = np.ones(ncell)
 
-        wj = 1.0 / np.sqrt(L * Cs_jj)
+        epsilons = profile * config.epsilon
+        wj = 1.0 / np.sqrt(L_jtl * Cs_jj)
 
         w_p = config.omega_pump
         v_p = config.v_pump
         thetas = w_p / v_p * ns * a
-
-        if config.adiabatic_pump:
-            # Gap depth falls off steeply as |v_ratio| grows (empirical fit
-            # at ncell=2000, epsilon=0.04: depth_dB ~= -77.63 + 63.23*log10(
-            # |v_ratio|) -- see scratch/vratio_depth_dependence.py), so a
-            # chirped v_pump ramp naturally digs deeper at the low-|v_ratio|
-            # end of the ramp than the high end. Boost epsilon (linearly,
-            # since gap depth in dB scales ~linearly with epsilon) wherever
-            # depth would otherwise fall short of the ramp's shallowest
-            # (worst-case) point, so depth stays roughly constant along z.
-            v_ratio_local = np.abs(config.v_signal / v_p)
-            depth_fit_db = -77.63 + 63.23 * np.log10(v_ratio_local)
-            depth_ref_db = depth_fit_db.max()  # shallowest point -> unity gain
-            vratio_compensation = np.clip(depth_ref_db / depth_fit_db, 0.0, 1.0)
-
-            # v_ratio alone isn't the whole story: wherever v_pump changes
-            # slowly with z, many adjacent cells sit at nearly the same
-            # v_pump/local phase-matched frequency and stack their coupling
-            # there (higher effective cell density -> more natural depth,
-            # independent of the v_ratio-dependence above); wherever it
-            # changes fast, few cells land near any given frequency (lower
-            # density -> less natural depth). Scale epsilon down where
-            # density is high and up where it's low so the two effects
-            # (bare v_ratio-dependence and ramp-shape cell density) don't
-            # double up or fight each other.
-            dv_dn = np.gradient(v_p, ns)
-            density = 1.0 / np.abs(dv_dn)
-            density_compensation = density.min() / density
-
-            profile = profile * vratio_compensation * density_compensation
-
-        epsilons = profile * config.epsilon
 
         M = config.M
         w_s = np.asarray(config.omegas)   # (Nf,)
         Nf = len(w_s)
         n = len(config.ks_state)
 
+        L_slot_mode = ZR / config.omega_cutoff_slot_mode * 2
+        C_slot_mode = 2 * 1.0 / (config.omega_cutoff_slot_mode * ZR)
+        Ci_coupling = 2 * 1.0 / (config.omega_cutoff_coupling * ZR)
+
         cells = []
         for i in range(ncell):
             first = cell_topology == "L" and i == 0
 
             halve_end = cell_topology == "L" and (i == 0 or i == ncell - 1)
-            C_end = C[i] / (2.0 if halve_end else 1.0)
-            _L, _wj, _eps, _th = L[i], wj[i], epsilons[i], thetas[i]
+            C_end = C_jtl[i] / (2.0 if halve_end else 1.0)
+            C_slot_end = C_slot_mode[i] / (2.0 if halve_end else 1.0)
+            _L, _wj, _eps, _th = L_jtl[i], wj[i], epsilons[i], thetas[i]
             _C = C_end
 
             
@@ -127,6 +101,7 @@ class JTLDiscrete:
             omega_sb = w_s[:, None] + np.array(config.ks_state)[None, :] * w_p
 
             Zs_harm_arr = np.zeros((Nf, n, n), dtype=complex)
+            Zs_slot_arr = np.zeros((Nf, n, n), dtype=complex)
             if not first:
                 # Exact parallel-LC series impedance: JJ inductor || self-capacitance
                 Ccap_val = 1.0 / (_wj**2 * _L)
@@ -136,15 +111,27 @@ class JTLDiscrete:
                 )
                 Zs_harm_arr = squid.impedance_matrix(omega_sb)  # (Nf, n, n)
 
+                Zs_slot = Inductor(L_slot_mode[i])
+                Zs_slot_arr = Zs_slot.impedance_matrix(omega_sb)
+
             # Shunt-to-ground capacitor: unmodulated, so it doesn't couple
             # sidebands -- its harmonic matrix is diagonal.
             Yg = Capacitor(_C)
             Yg_harm_arr = Yg.admittance_matrix(omega_sb)  # (Nf, n, n)
 
+            Yg_slot = Capacitor(C_slot_end)
+            Yg_slot_arr = Yg_slot.admittance_matrix(omega_sb)
+
+            Yi_slot = Capacitor(Ci_coupling[i])
+            Yi_slot_coupling_arr = Yi_slot.admittance_matrix(omega_sb)
+
             cells.append(
                 CellImmitance(
                     Zs_harm_fn=Zs_harm_arr,
                     Yg_harm_fn=Yg_harm_arr,
+                    Zs_slot_fn=Zs_slot_arr,
+                    Yg_slot_fn=Yg_slot_arr,
+                    Yi_slot_coupling_fn=Yi_slot_coupling_arr
                 )
             )
         return cells
