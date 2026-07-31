@@ -54,6 +54,53 @@ def cascade_all(S_cells: np.ndarray, backend: Backend | str | None = None) -> np
     return _resolve_backend(backend).cascade_all(np.asarray(S_cells, dtype=complex))
 
 
+def terminate_ports(S: np.ndarray, terminated_idx, gamma: complex) -> np.ndarray:
+    """
+    Eliminate a subset of ports from a multiport S-matrix by terminating
+    each of them with the same one-port reflection coefficient (short:
+    gamma=-1, open: gamma=+1, matched: gamma=0 -- a no-op, returns S_AA
+    unchanged), returning the S-matrix of the remaining ports only.
+
+    Physically: the eliminated ports are each independently closed off by
+    their own reflective load (not connected to each other), e.g. the two
+    physical ends of an internal/bound mode with no external port -- see
+    `Simulation.get_s_matrix_slot_terminated`. Standard port-loading
+    reduction: partitioning ports into kept (A) and terminated (B),
+
+        S_reduced = S_AA + gamma * S_AB @ (I - gamma*S_BB)^-1 @ S_BA
+
+    Parameters
+    ----------
+    S : ndarray, shape (Nf, N, N)
+    terminated_idx : 1D int array-like
+        Indices (into the N ports) to eliminate. The remaining ports keep
+        their relative order.
+    gamma : complex
+        Reflection coefficient applied uniformly to every terminated port.
+
+    Returns
+    -------
+    ndarray, shape (Nf, N - len(terminated_idx), N - len(terminated_idx))
+    """
+    S = np.asarray(S, dtype=complex)
+    Nf, N, _ = S.shape
+    terminated_idx = np.asarray(terminated_idx, dtype=int)
+    kept_idx = np.setdiff1d(np.arange(N), terminated_idx)  # sorted, keeps relative order
+
+    S_AA = S[:, kept_idx[:, None], kept_idx[None, :]]
+    if gamma == 0:
+        return S_AA
+
+    S_AB = S[:, kept_idx[:, None], terminated_idx[None, :]]
+    S_BA = S[:, terminated_idx[:, None], kept_idx[None, :]]
+    S_BB = S[:, terminated_idx[:, None], terminated_idx[None, :]]
+
+    k = len(terminated_idx)
+    eye = np.broadcast_to(np.eye(k, dtype=complex), (Nf, k, k))
+    X = np.linalg.solve(eye - gamma * S_BB, S_BA)  # (I - gamma*S_BB) @ X = S_BA
+    return S_AA + gamma * (S_AB @ X)
+
+
 def ABCD_to_S(ABCD: np.ndarray, Z0, backend: Backend | str | None = None) -> np.ndarray:
     """
     Convert ABCD transfer matrix to S-parameters.

@@ -120,12 +120,13 @@ class NumpyBackend(Backend):
 
         # power-wave S = √G0 (Z - Z0*) (Z + Z0)^{-1} √G0^{-1}
         G0 = np.real(z0)
-        sqrtG0 = np.sqrt(G0)
+        sqrtG0 = 1 / np.sqrt(G0)
         inv_sqrtG0 = 1.0 / sqrtG0
 
         # P = Z + diag(Z0) = M + diag(Z0 + conj(Z0)) = M + diag(2 Re(Z0))
         P = M.copy()
         P[:, idx, idx] += 2.0 * G0
+
         # right-solve P^{-1}: S0 = M P^{-1}  ->  P^T S0^T = M^T
         S0 = np.linalg.solve(P.swapaxes(-1, -2), M.swapaxes(-1, -2)).swapaxes(-1, -2)
 

@@ -82,9 +82,10 @@ class JTLDiscreteSlotMode:
         Nf = len(w_s)
         n = len(config.ks_state)
 
-        L_slot_mode = ZR / config.omega_cutoff_slot_mode * 2
-        C_slot_mode = 2 * 1.0 / (config.omega_cutoff_slot_mode * ZR)
-        Ci_coupling = 2 * 1.0 / (config.omega_cutoff_coupling * ZR)
+        ZR_slot = ZR*1.2
+        L_slot_mode = ZR_slot / config.omega_cutoff_slot_mode * 2
+        C_slot_mode = 2 * 1.0 / (config.omega_cutoff_slot_mode * ZR_slot)
+        Ci_coupling = 2 * 1.0 / (config.omega_cutoff_coupling * ZR_slot)
 
         cells = []
         for i in range(ncell):

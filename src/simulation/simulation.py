@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from backends import Backend
 from symbolic_solver.cell_single_mode import CellSingleMode
 from symbolic_solver.cell_single_mode_symmetric import CellSingleModeSymmetric
-from numerical_solver.s_matrix import SMatrix, ABCD_to_S, cascade_all
+from numerical_solver.s_matrix import SMatrix, ABCD_to_S, cascade_all, terminate_ports
 from models.electrical_elements import multipump_frequency_grid
 from analysis.dispersion_relation import bloch_wavenumbers
 from analysis.s_parameters import plot_s_parameters as _plot_s_params
@@ -83,6 +83,7 @@ class Simulation:
         self._S_cells = None
         self._S_matrix: SMatrix | None = None
         self._S_matrix_normalized: bool | None = None
+        self._S_matrix_raw_full: np.ndarray | None = None
 
     def get_symbolic_matrix(self):
         """
@@ -127,6 +128,47 @@ class Simulation:
             ).reshape(Nf, Nc, N, N)
         return self._S_cells
 
+    def _port_omegas_half(self) -> np.ndarray:
+        """Tracked sideband frequencies at one physical end, shape (Nf, n_half)."""
+        if isinstance(self._cfg.omega_pump, list):
+            # Multi-pump: tracked state is the (k_1,...,k_P) tensor lattice,
+            # not a flat ks_state -- build the same per-state frequency grid
+            # JTLDiscreteMultiPump uses, via multipump_frequency_grid
+            # (kron/itertools.product order), one signal frequency at a time.
+            return np.abs(np.stack([
+                multipump_frequency_grid(ws, self._cfg.omega_pump, self._cfg.Kmax)[0]
+                for ws in self._cfg.omegas
+            ]))
+        ks = np.asarray(self._cfg.ks_state)
+        return np.abs(self._cfg.omegas[:, None] + ks[None, :] * self._cfg.omega_pump)
+
+    def _photon_flux_weights(self, N: int) -> np.ndarray:
+        """
+        Photon-flux normalization weights 1/sqrt(omega_k), shape (Nf, N).
+
+        Ordinary cascades have N = 2*n_half ports (n_half tracked sidebands
+        x 2 physical ends). Slot-mode cascades (extra internal [V', I_s]
+        conductor -- see JTLDiscreteSlotMode) interleave a second conductor
+        at each end that carries the *same* Floquet sideband frequencies,
+        so N = 4*n_half = 2*(2*n_half): each end's port block is
+        [slot(n_half), main(n_half)], both weighted from the same
+        port_omegas_half. blocks_per_side generalizes this instead of
+        hardcoding 1x or 2x, so it stays correct if more coupled conductors
+        are added later.
+        """
+        port_omegas_half = self._port_omegas_half()
+        n_half = port_omegas_half.shape[-1]
+        blocks_per_side, remainder = divmod(N, 2 * n_half)
+        if remainder != 0:
+            raise ValueError(
+                f"S-matrix has {N} ports, not a multiple of "
+                f"2*{n_half} tracked sideband frequencies -- can't "
+                f"build the photon-flux weight vector."
+            )
+        port_omegas_one_side = np.tile(port_omegas_half, (1, blocks_per_side))  # (Nf, N//2)
+        port_omegas = np.concatenate([port_omegas_one_side, port_omegas_one_side], axis=1)  # (Nf, N)
+        return 1 / np.sqrt(port_omegas)
+
     def get_s_matrix(self, normalize: bool = True) -> SMatrix:
         """
         Return the cascaded S-matrix.
@@ -150,48 +192,79 @@ class Simulation:
                 self._S_matrix = SMatrix(S_total, self._cfg.Z0)
 
             if normalize:
-                if isinstance(self._cfg.omega_pump, list):
-                    # Multi-pump: tracked state is the (k_1,...,k_P) tensor
-                    # lattice, not a flat ks_state -- build the same
-                    # per-state frequency grid JTLDiscreteMultiPump uses,
-                    # via multipump_frequency_grid (kron/itertools.product
-                    # order), one signal frequency at a time.
-                    port_omegas_half = np.abs(np.stack([
-                        multipump_frequency_grid(ws, self._cfg.omega_pump, self._cfg.Kmax)[0]
-                        for ws in self._cfg.omegas
-                    ]))  # (Nf, n_half)
-                else:
-                    ks = np.asarray(self._cfg.ks_state)
-                    port_omegas_half = np.abs(self._cfg.omegas[:, None] + ks[None, :] * self._cfg.omega_pump)  # (Nf, n_half)
-
-                # Ordinary cascades have N = 2*n_half ports (n_half tracked
-                # sidebands x 2 physical ends). Slot-mode cascades (extra
-                # internal [V', I_s] conductor -- see JTLDiscreteSlotMode)
-                # interleave a second conductor at each end that carries the
-                # *same* Floquet sideband frequencies, so N = 4*n_half =
-                # 2*(2*n_half): each end's port block is [slot(n_half),
-                # main(n_half)], both weighted from the same port_omegas_half.
-                # blocks_per_side generalizes this instead of hardcoding 1x
-                # or 2x, so it stays correct if more coupled conductors are
-                # added later.
-                N = self._S_matrix.array.shape[-1]
-                n_half = port_omegas_half.shape[-1]
-                blocks_per_side, remainder = divmod(N, 2 * n_half)
-                if remainder != 0:
-                    raise ValueError(
-                        f"S-matrix has {N} ports, not a multiple of "
-                        f"2*{n_half} tracked sideband frequencies -- can't "
-                        f"build the photon-flux weight vector."
-                    )
-                port_omegas_one_side = np.tile(port_omegas_half, (1, blocks_per_side))  # (Nf, N//2)
-                port_omegas = np.concatenate([port_omegas_one_side, port_omegas_one_side], axis=1)  # (Nf, N)
-                weights = 1 / np.sqrt(port_omegas)
+                weights = self._photon_flux_weights(self._S_matrix.array.shape[-1])
                 S_ph = self._S_matrix.array / (weights[:, None, :] / weights[:, :, None])
                 self._S_matrix = SMatrix(S_ph, self._cfg.Z0)
 
             self._S_matrix_normalized = normalize
 
         return self._S_matrix
+
+    def get_s_matrix_slot_terminated(self, gamma: complex, normalize: bool = True) -> SMatrix:
+        """
+        Cascaded S-matrix with the slot line's own two ports (input- and
+        output-side) eliminated via a reflective one-port termination,
+        instead of exposed as measurable 50 Ohm ports.
+
+        Physically appropriate whenever the slot/parasitic mode has no real
+        external connection (e.g. the CPW slotline mode on a chip whose
+        ground planes are one continuous conductor): it reflects off the
+        chip edges rather than radiating into a matched load, so its effect
+        on the main line shows up as resonant features in frequency, not
+        broadband loss. Treating those ports as matched-50-Ohm (as plain
+        `get_s_matrix` does) instead invents an absorbing channel that
+        isn't physically there, making the main-line S-parameters look
+        lossy for a reason that isn't real loss.
+
+        Only valid for cascades whose cells carry slot fields (e.g.
+        `JTLDiscreteSlotMode`): N must be 4x the tracked sideband count.
+        The raw (un-terminated, un-normalized) cascade is cached, so
+        calling this repeatedly with different `gamma` to compare short vs.
+        open vs. matched is cheap -- no cascade recompute.
+
+        Parameters
+        ----------
+        gamma : complex
+            Reflection coefficient at the slot line's two physical ends:
+              -1 : short (grounds strapped together / continuous, V'=0)
+              +1 : open (grounds not connected there, I_s=0)
+               0 : matched 50 Ohm (no reflection -- for comparison against
+                   short/open; equivalent in effect to `get_s_matrix`'s
+                   plain 4m-port result, but reduced to the same 2m-port
+                   shape as short/open so all three are directly comparable)
+        normalize : bool
+            Same photon-flux normalization as `get_s_matrix`, applied to
+            the reduced (main-line-only) S-matrix after termination.
+
+        Returns
+        -------
+        SMatrix, shape (Nf, 2m, 2m), ports ordered [main_in, main_out]
+        (same layout as an ordinary non-slot-mode `get_s_matrix` result).
+        """
+        if self._S_matrix_raw_full is None:
+            with _timer("S-matrix cascade"):
+                S_cells = self.get_s_cells()
+                self._S_matrix_raw_full = cascade_all(S_cells, backend=self._backend)
+
+        S_raw = self._S_matrix_raw_full  # (Nf, N, N), un-normalized, Z0-referenced
+        N = S_raw.shape[-1]
+        m = len(self._cfg.ks_state)
+        if isinstance(self._cfg.omega_pump, list) or N != 4 * m:
+            raise ValueError(
+                "get_s_matrix_slot_terminated needs a slot-mode, single-pump "
+                f"cascade with N = 4*len(ks_state) ports; got N={N}."
+            )
+        # Port layout (see JTLDiscreteSlotMode / slot_mode_matrix):
+        # [slot_in(m), main_in(m), slot_out(m), main_out(m)].
+        slot_idx = np.r_[0:m, 2 * m:3 * m]
+
+        S_reduced = terminate_ports(S_raw, slot_idx, gamma)  # (Nf, 2m, 2m): [main_in, main_out]
+
+        if normalize:
+            weights = self._photon_flux_weights(S_reduced.shape[-1])
+            S_reduced = S_reduced / (weights[:, None, :] / weights[:, :, None])
+
+        return SMatrix(S_reduced, self._cfg.Z0)
 
     def plot_dispersion_relation(
         self,
