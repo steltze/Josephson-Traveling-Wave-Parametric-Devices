@@ -10,7 +10,6 @@ import matplotlib.pyplot as plt
 from logger import get_logger, setup_logging
 from simulation import SimulationConfig, Simulation
 from models import JTLDiscrete
-from models import JTLDiscreteSlotMode
 from analysis.checks import check_transfer_matrix_determinant, check_photon_flux_conservation
 from examples.utils import save_all
 from dashboard import Dashboard
@@ -42,7 +41,7 @@ def julia_comparison(dashboard=False):
         n_freqs = 500,
         disorder=False,
         epsilon_nramp=0, # where the peak will be
-        adiabatic_pump=False,
+        adiabatic_pump=True,
     )
     central_band = 1
     transmitted_band = 3 # central_band + len(cfg.ks_state) 
@@ -67,7 +66,7 @@ def julia_comparison(dashboard=False):
     fig, ax2 = plt.subplots()
     for i, epsilon_ramp in enumerate(epsilon_ramp_values):
         cfg_eps = replace(cfg, epsilon_nramp=epsilon_ramp)
-        sim_eps = Simulation(JTLDiscreteSlotMode, cfg_eps, backend="numpy")
+        sim_eps = Simulation(JTLDiscrete, cfg_eps, backend="numpy")
         S_ph_eps = sim_eps.get_s_matrix(normalize=True).array
         dashboard_runs.append(S_ph_eps)
         dashboard_labels.append(rf"$\epsilon_{{\mathrm{{envelope}}}}={epsilon_ramp:.3f}$")

@@ -119,10 +119,8 @@ class SimulationConfig:
 
     # Adiabatic pump velocity
     adiabatic_pump: bool = False
-    v_pump_ramp_start: float = 1.5  # v_pump(cell 0) / nominal v_pump
+    v_pump_ramp_start: float = 1.2  # v_pump(cell 0) / nominal v_pump
     v_pump_ramp_end: float = 0.9  # v_pump(last cell) / nominal v_pump
-    v_pump_ramp_power: float = 3.0  # <1 falls faster early, >1 falls faster late
-    v_pump_ramp_linear_floor: float = 0.4  # blend-in of plain-linear ramp (0-1)
 
     # Circuit frequencies (rad/GHz)
     omega_cutoff_slot_mode: float = 50 * 2 * np.pi
@@ -216,22 +214,7 @@ class SimulationConfig:
             ramp_start, ramp_end = self.v_pump_ramp_start, self.v_pump_ramp_end
             if not self.adiabatic_pump:
                 return v_nominal
-            # p < 1 front-loads the drop (falls fast, then levels off);
-            # p > 1 back-loads it (stays near ramp_start, then falls fast).
-            # A pure power law has zero slope at the end it "hugs" (t=0 for
-            # p>1), which piles many cells onto ~the same v_pump there --
-            # a sharp, narrow spike rather than part of the flat floor.
-            # Blending in some plain-linear ramp floors that slope so the
-            # end spreads into the same flat floor as the rest of the gap.
-            t = np.linspace(0, 1, self.ncell)
-            x = t ** self.v_pump_ramp_power
-            floor = self.v_pump_ramp_linear_floor
-            x = (1 - floor) * x + floor * t
-            # import matplotlib.pyplot as plt
-            # plt.plot(t, x)
-            # plt.show()
-            # exit()
-            return ramp_start * v_nominal + (ramp_end - ramp_start) * v_nominal * x
+            return np.linspace(ramp_start * v_nominal, ramp_end * v_nominal, self.ncell)
 
         if isinstance(self.v_ratio, list):
             return [v_of(vr) for vr in self.v_ratio]
