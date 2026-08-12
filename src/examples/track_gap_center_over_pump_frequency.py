@@ -62,9 +62,7 @@ def track_gap_center_over_pump_frequency():
         gap_min_index = np.abs(smat.array)[:, 1, 3].argmin()
         gap_min[index] = signal_freqs[gap_min_index] / 2 / np.pi
 
-        check = check_photon_flux_conservation(
-            smat.array, signal_freqs, w_p, ks_state
-        )
+        check = check_photon_flux_conservation(smat.array, signal_freqs, w_p, ks_state)
 
         # Extract window around gap_min_index, port 0 (signal input L)
         w_start = max(0, gap_min_index - window_half)
@@ -140,4 +138,3 @@ def track_gap_center_over_pump_frequency():
     plt.show()
 
     return
-

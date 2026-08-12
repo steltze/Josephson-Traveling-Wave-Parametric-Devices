@@ -94,14 +94,14 @@ class JTLDiscreteMultiPump:
             profile = np.ones(ncell)
 
         w_p = list(config.omega_pump)  # P pump angular frequencies
-        v_p = list(config.v_pump)      # P pump phase velocities
+        v_p = list(config.v_pump)  # P pump phase velocities
         P = len(w_p)
         if len(v_p) != P or len(config.epsilon) != P:
             raise ValueError("omega_pump, v_pump and epsilon must all have length P")
 
         epsilons = [profile * eps_j for eps_j in config.epsilon]  # P x (ncell,)
         wj = 1.0 / np.sqrt(L * Cs_jj)
-        thetas = [w_p[j] / v_p[j] * ns * a for j in range(P)]     # P x (ncell,)
+        thetas = [w_p[j] / v_p[j] * ns * a for j in range(P)]  # P x (ncell,)
 
         Kmax = list(config.Kmax)
         n_sb = n_sidebands_from_Kmax(Kmax)
@@ -112,9 +112,7 @@ class JTLDiscreteMultiPump:
 
         # Full tensor-lattice sideband grid (Nf, D); shared across cells --
         # only each cell's per-pump theta phase differs.
-        omega_sb = np.stack(
-            [multipump_frequency_grid(ws, w_p, Kmax)[0] for ws in w_s]
-        )
+        omega_sb = np.stack([multipump_frequency_grid(ws, w_p, Kmax)[0] for ws in w_s])
         n = omega_sb.shape[1]
 
         cells = []

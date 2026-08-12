@@ -49,7 +49,9 @@ class TestDefaultCascadeAll:
 
     def test_single_cell_is_identity(self):
         rng = np.random.default_rng(1)
-        s_cells = rng.standard_normal((3, 1, 4, 4)) + 1j * rng.standard_normal((3, 1, 4, 4))
+        s_cells = rng.standard_normal((3, 1, 4, 4)) + 1j * rng.standard_normal(
+            (3, 1, 4, 4)
+        )
         backend = NumpyBackend()
         np.testing.assert_array_equal(backend.cascade_all(s_cells), s_cells[:, 0])
 
@@ -75,9 +77,15 @@ class TestDefaultSingleModeMatrixGrid:
             for _ in range(Ncells)
         ]
         backend = NumpyBackend()
-        fn = backend.single_mode_matrix if topology == "L" else backend.symmetric_single_mode_matrix
+        fn = (
+            backend.single_mode_matrix
+            if topology == "L"
+            else backend.symmetric_single_mode_matrix
+        )
 
         T_grid = backend.single_mode_matrix_grid(cells, topology)
         assert T_grid.shape == (Nf, Ncells, 2 * m, 2 * m)
         for c, cell in enumerate(cells):
-            np.testing.assert_allclose(T_grid[:, c], fn(cell.Zs_harm_fn, cell.Yg_harm_fn))
+            np.testing.assert_allclose(
+                T_grid[:, c], fn(cell.Zs_harm_fn, cell.Yg_harm_fn)
+            )

@@ -193,7 +193,13 @@ def plot_reflection_vs_transmission(
     if ax is None:
         _, ax = plt.subplots(figsize=(8, 5))
     (line,) = ax.plot(freqs, R, "-", label=f"R{f' ({label})' if label else ''}")
-    ax.plot(freqs, T, "--", color=line.get_color(), label=f"T{f' ({label})' if label else ''}")
+    ax.plot(
+        freqs,
+        T,
+        "--",
+        color=line.get_color(),
+        label=f"T{f' ({label})' if label else ''}",
+    )
     ax.set_xlabel("Frequency (GHz)")
     ax.set_ylabel("Power fraction")
     ax.set_ylim(-0.05, 1.05)
@@ -373,7 +379,9 @@ def check_cascade_associativity(
             f"(max {residual.max():.3e})."
         )
     else:
-        log.test(f"Cascade associativity check pass (max mismatch {residual.max():.3e}).")
+        log.test(
+            f"Cascade associativity check pass (max mismatch {residual.max():.3e})."
+        )
     return nf_idx, i_idx, j_idx
 
 

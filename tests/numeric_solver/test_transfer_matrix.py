@@ -16,7 +16,13 @@ def _random_zy(rng, Nf, m):
 
 
 def _make_cell(Zs, Yg):
-    return CellImmitance(theta=0.0, Zs0_fn=lambda w: 0.0, Yg0_fn=lambda w: 0.0, Zs_harm_fn=Zs, Yg_harm_fn=Yg)
+    return CellImmitance(
+        theta=0.0,
+        Zs0_fn=lambda w: 0.0,
+        Yg0_fn=lambda w: 0.0,
+        Zs_harm_fn=Zs,
+        Yg_harm_fn=Yg,
+    )
 
 
 class TestSingleModeMatrix:
@@ -88,7 +94,9 @@ class TestBackendParam:
         rng = np.random.default_rng(4)
         Zs, Yg = _random_zy(rng, 3, 2)
         np.testing.assert_allclose(
-            single_mode_matrix(Zs, Yg), single_mode_matrix(Zs, Yg, backend="numpy"), atol=1e-14
+            single_mode_matrix(Zs, Yg),
+            single_mode_matrix(Zs, Yg, backend="numpy"),
+            atol=1e-14,
         )
 
     def test_symmetric_single_mode_matrix_name_string_matches_default(self):

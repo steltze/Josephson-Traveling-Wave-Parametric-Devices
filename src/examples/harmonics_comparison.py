@@ -9,7 +9,10 @@ import matplotlib.pyplot as plt
 from logger import get_logger, setup_logging
 from simulation import SimulationConfig, Simulation
 from models import JTLDiscrete
-from analysis.checks import check_transfer_matrix_determinant, check_photon_flux_conservation
+from analysis.checks import (
+    check_transfer_matrix_determinant,
+    check_photon_flux_conservation,
+)
 from examples.utils import save_all
 
 log = get_logger(__name__)
@@ -28,7 +31,11 @@ def harmonics_comparison():
     energy_checks = np.zeros((2, len(signal_freqs)))
 
     for index, (M, ks_state, (i, j)) in enumerate(
-        [(1, [-2, -1, 0, 1, 2], (7, 2)), (2, [-2, -1, 0, 1, 2], (7, 2)), (5, [-2, -1, 0, 1, 2], (7, 2))]
+        [
+            (1, [-2, -1, 0, 1, 2], (7, 2)),
+            (2, [-2, -1, 0, 1, 2], (7, 2)),
+            (5, [-2, -1, 0, 1, 2], (7, 2)),
+        ]
     ):
         cfg = SimulationConfig(
             Z0=50,
@@ -84,4 +91,3 @@ def harmonics_comparison():
 
     # save_all("harmonics_comparison")
     plt.show()
-

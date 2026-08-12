@@ -16,8 +16,12 @@ def band_coupling_phased(n: int, offset: int, theta: float) -> np.ndarray:
     if abs(offset) >= n or offset == 0:
         return M
     idx = np.arange(n - abs(offset))
-    M[idx, idx + abs(offset)] = np.exp(1j * abs(offset) * theta)      # target < source: down-shift
-    M[idx + abs(offset), idx] = np.exp(-1j * abs(offset) * theta)     # target > source: up-shift
+    M[idx, idx + abs(offset)] = np.exp(
+        1j * abs(offset) * theta
+    )  # target < source: down-shift
+    M[idx + abs(offset), idx] = np.exp(
+        -1j * abs(offset) * theta
+    )  # target > source: up-shift
     return M
 
 
@@ -144,7 +148,9 @@ class ModulatedInductor(Component):
         self.L0 = L0
         self.eps = eps
         self.theta = theta
-        self.coeffs = coeffs if coeffs is not None else {p: 1.0 for p in range(1, order + 1)}
+        self.coeffs = (
+            coeffs if coeffs is not None else {p: 1.0 for p in range(1, order + 1)}
+        )
 
     def impedance(self, omega):
         omega = np.atleast_2d(np.asarray(omega, dtype=float))  # (Nf, n)
@@ -152,7 +158,7 @@ class ModulatedInductor(Component):
 
         L = np.eye(n, dtype=complex)
         for p, a in self.coeffs.items():
-            L = L + (self.eps ** p) * a * band_coupling_phased(n, p, self.theta)
+            L = L + (self.eps**p) * a * band_coupling_phased(n, p, self.theta)
 
         # Omega = diag(omega); Omega @ M is row-scaling, not a real matmul --
         # done via broadcasting instead of materializing a mostly-zero
@@ -266,8 +272,10 @@ class ModulatedInductorMultiPump(Component):
 
         for j in range(self.P):
             for p, a in self.coeffs[j].items():
-                mats = list(Is)                       # identities in every slot
-                mats[j] = band_coupling_phased(dims[j], p, self.theta[j])  # hop in slot j
+                mats = list(Is)  # identities in every slot
+                mats[j] = band_coupling_phased(
+                    dims[j], p, self.theta[j]
+                )  # hop in slot j
                 L = L + (self.eps[j] ** p) * a * _kron_list(mats)
 
         return L
@@ -288,7 +296,7 @@ class ModulatedInductorMultiPump(Component):
                 f"(n_sidebands={self.n_sidebands})"
             )
 
-        L = self._build_L_over_L0()                 # (D, D)
+        L = self._build_L_over_L0()  # (D, D)
         # Omega = diag(omega); Omega @ M is row-scaling, not a real matmul --
         # done via broadcasting instead of materializing a mostly-zero
         # (Nf,D,D) diagonal matrix and paying an O(Nf D^3) batched matmul
@@ -324,6 +332,7 @@ def multipump_frequency_grid(omega_s, omega_p, Kmax):
     labels     : list of (k_1,...,k_P) tuples in matching order
     """
     from itertools import product
+
     ranges = [range(k_min, k_max + 1) for k_min, k_max in Kmax]
     labels = list(product(*ranges))
     omega_p = np.asarray(omega_p, dtype=float)
@@ -359,7 +368,16 @@ if __name__ == "__main__":
 
     # confirm: (0,0)->(1,1) entry is ZERO (no single-cell double hop)
     lut = {lab: i for i, lab in enumerate(labels)}
-    print("\n(0,0)->(1,0) coupling in L/L0 =", Lrel[lut[(0, 0)], lut[(1, 0)]].real, "(eps1)")
-    print("(0,0)->(0,1) coupling in L/L0 =", Lrel[lut[(0, 0)], lut[(0, 1)]].real, "(eps2)")
-    print("(0,0)->(1,1) coupling in L/L0 =", Lrel[lut[(0, 0)], lut[(1, 1)]].real,
-          "(must be 0: not a single hop)")
+    print(
+        "\n(0,0)->(1,0) coupling in L/L0 =",
+        Lrel[lut[(0, 0)], lut[(1, 0)]].real,
+        "(eps1)",
+    )
+    print(
+        "(0,0)->(0,1) coupling in L/L0 =", Lrel[lut[(0, 0)], lut[(0, 1)]].real, "(eps2)"
+    )
+    print(
+        "(0,0)->(1,1) coupling in L/L0 =",
+        Lrel[lut[(0, 0)], lut[(1, 1)]].real,
+        "(must be 0: not a single hop)",
+    )

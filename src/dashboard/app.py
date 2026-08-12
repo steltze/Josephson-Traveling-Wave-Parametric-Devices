@@ -50,7 +50,7 @@ if not args.data:
         "`streamlit run` directly:\n\n"
         "```python\n"
         "from dashboard import Dashboard\n"
-        "Dashboard([S1, S2], freqs=cfg.freqs, labels=[\"run1\", \"run2\"], "
+        'Dashboard([S1, S2], freqs=cfg.freqs, labels=["run1", "run2"], '
         "ks_state=cfg.ks_state).run()\n"
         "```"
     )
@@ -78,7 +78,9 @@ with ctrl_col:
 
     options = list(option_to_run_pair)
     default = options[:1]
-    selected = st.multiselect("Select S-parameters to plot", options=options, default=default)
+    selected = st.multiselect(
+        "Select S-parameters to plot", options=options, default=default
+    )
 
     auto_ylim = st.checkbox("Auto y-axis (dB)", value=True)
     ylim = None

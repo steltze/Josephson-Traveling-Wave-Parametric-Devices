@@ -67,7 +67,7 @@ def _signal_s_matrix(cfg, T_grid):
     same cascade + photon-flux normalization as `Simulation.get_s_matrix`.
     """
     sim = Simulation(JTLDiscrete, cfg, cell_topology="L")
-    sim._T_grid = T_grid  # bypass get_transfer_matrix_grid(); reuse its cascade/normalize logic
+    sim._T_grid = T_grid  
     return sim.get_s_matrix().array
 
 
@@ -127,7 +127,10 @@ def compare_transfer_matrix_implementations():
 
         log.info(
             "[%s] max abs = %.3e, max rel = %.3e, mean abs = %.3e",
-            label, diff.max(), rel_diff.max(), diff.mean(),
+            label,
+            diff.max(),
+            rel_diff.max(),
+            diff.mean(),
         )
 
         if diff.max() > 0:
@@ -135,12 +138,16 @@ def compare_transfer_matrix_implementations():
             _, _, row, col = worst
             log.info(
                 "  worst entry: %s -> %s  (numeric=%s, symbolic=%s)",
-                state_syms[row], state_syms[col],
-                T_numeric[worst], T_symbolic[worst],
+                state_syms[row],
+                state_syms[col],
+                T_numeric[worst],
+                T_symbolic[worst],
             )
 
         max_abs_per_freq = diff.reshape(len(cfg.freqs), -1).max(axis=1)
-        plt.semilogy(cfg.freqs, np.maximum(max_abs_per_freq, 1e-18), marker="o", label=label)
+        plt.semilogy(
+            cfg.freqs, np.maximum(max_abs_per_freq, 1e-18), marker="o", label=label
+        )
 
     plt.xlabel("Frequency (GHz)")
     plt.ylabel("max |T_numeric - T_symbolic| over cells/entries")
@@ -162,7 +169,9 @@ def compare_transfer_matrix_implementations():
 
         fig, (ax_mag, ax_diff) = plt.subplots(2, 1, sharex=True, figsize=(8, 7))
         ax_mag.plot(cfg.freqs, db_num, label="single_mode_matrix_grid (active)")
-        ax_mag.plot(cfg.freqs, db_sym, "--", label="build_cell_freq_matrices (symbolic)")
+        ax_mag.plot(
+            cfg.freqs, db_sym, "--", label="build_cell_freq_matrices (symbolic)"
+        )
         ax_mag.set_ylabel("|S| signal L->R (dB)")
         ax_mag.set_title(f"Signal (k=0) transmission, {label}")
         ax_mag.legend()

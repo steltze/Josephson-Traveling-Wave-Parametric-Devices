@@ -7,17 +7,19 @@ from logger import get_logger
 
 log = get_logger(__name__)
 
-mpl.rcParams.update({
-    "font.size": 12,
-    "axes.titlesize": 14,
-    "axes.labelsize": 13,
-    "xtick.labelsize": 12,
-    "ytick.labelsize": 12,
-    "legend.fontsize": 11,
-    "figure.titlesize": 14,
-    "savefig.dpi": 300,
-    "savefig.bbox": "tight",
-})
+mpl.rcParams.update(
+    {
+        "font.size": 12,
+        "axes.titlesize": 14,
+        "axes.labelsize": 13,
+        "xtick.labelsize": 12,
+        "ytick.labelsize": 12,
+        "legend.fontsize": 11,
+        "figure.titlesize": 14,
+        "savefig.dpi": 300,
+        "savefig.bbox": "tight",
+    }
+)
 
 _FIG_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "figures")
 

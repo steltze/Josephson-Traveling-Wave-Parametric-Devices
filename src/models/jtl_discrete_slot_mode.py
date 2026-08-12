@@ -32,19 +32,19 @@ class JTLDiscreteSlotMode:
         -------
         list[CellImmitance], length config.ncell
         """
-            
+
         ncell = config.ncell
 
         if cell_topology == "L":
             ns = np.zeros(ncell)
-            ns[1:] = np.arange(ncell-1)
+            ns[1:] = np.arange(ncell - 1)
         else:
             ns = np.arange(ncell)
 
         a = config.cell_size
 
         ZR = config.Z0 * np.ones(ncell)
- 
+
         L_jtl = ZR / config.omega_cutoff * 2
         C_jtl = 2 * 1.0 / (config.omega_cutoff * ZR)
         Cs_jj = 1.0 / (
@@ -78,11 +78,11 @@ class JTLDiscreteSlotMode:
         thetas = w_p / v_p * ns * a
 
         M = config.M
-        w_s = np.asarray(config.omegas)   # (Nf,)
+        w_s = np.asarray(config.omegas)  # (Nf,)
         Nf = len(w_s)
         n = len(config.ks_state)
 
-        ZR_slot = ZR*1.2
+        ZR_slot = ZR / 5.0
         L_slot_mode = ZR_slot / config.omega_cutoff_slot_mode * 2
         C_slot_mode = 2 * 1.0 / (config.omega_cutoff_slot_mode * ZR_slot)
         Ci_coupling = 2 * 1.0 / (config.omega_cutoff_coupling * ZR_slot)
@@ -97,7 +97,6 @@ class JTLDiscreteSlotMode:
             _L, _wj, _eps, _th = L_jtl[i], wj[i], epsilons[i], thetas[i]
             _C = C_end
 
-            
             # Sideband frequencies for each signal freq: (Nf, n)
             omega_sb = w_s[:, None] + np.array(config.ks_state)[None, :] * w_p
 
@@ -132,7 +131,7 @@ class JTLDiscreteSlotMode:
                     Yg_harm_fn=Yg_harm_arr,
                     Zs_slot_fn=Zs_slot_arr,
                     Yg_slot_fn=Yg_slot_arr,
-                    Yi_slot_coupling_fn=Yi_slot_coupling_arr
+                    Yi_slot_coupling_fn=Yi_slot_coupling_arr,
                 )
             )
         return cells

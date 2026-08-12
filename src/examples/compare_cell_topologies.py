@@ -52,7 +52,9 @@ def compare_cell_topologies():
 
     log.info("omega_pump = %.3f GHz", base_cfg.omega_pump / (2 * np.pi))
 
-    cfgs = {topology: replace(base_cfg, ncell=_NCELL[topology]) for topology in ("L", "pi")}
+    cfgs = {
+        topology: replace(base_cfg, ncell=_NCELL[topology]) for topology in ("L", "pi")
+    }
     sims = {}
     for topology, cfg in cfgs.items():
         sim = Simulation(JTLDiscrete, cfg, cell_topology=topology)
@@ -72,8 +74,12 @@ def compare_cell_topologies():
         s11 = S[:, signal_port, signal_port]
         s31 = S[:, 2, signal_port]
         s_params[topology] = (s11, s31)
-        ax_gain.plot(base_cfg.freqs, 20 * np.log10(np.abs(s11)), color=color, label=topology)
-        ax_idler.plot(base_cfg.freqs, 20 * np.log10(np.abs(s31)), color=color, label=topology)
+        ax_gain.plot(
+            base_cfg.freqs, 20 * np.log10(np.abs(s11)), color=color, label=topology
+        )
+        ax_idler.plot(
+            base_cfg.freqs, 20 * np.log10(np.abs(s31)), color=color, label=topology
+        )
     ax_gain.set_title("Signal reflection |S11|")
     ax_idler.set_title("Signal->idler gain |S31|")
     for ax in (ax_gain, ax_idler):

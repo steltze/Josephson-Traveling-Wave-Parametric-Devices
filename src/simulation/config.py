@@ -113,7 +113,7 @@ class SimulationConfig:
 
     # Disorder
     disorder: bool = False
-    disorder_span: float = 1e-1 # e.g 1%
+    disorder_span: float = 1e-1  # e.g 1%
     disorder_seed: int | None = 42
 
     # Adiabatic ramp (0 = flat) for epsilon
@@ -123,7 +123,6 @@ class SimulationConfig:
     adiabatic_pump: bool = False
     v_pump_ramp_start: float = 1.2  # v_pump(cell 0) / nominal v_pump
     v_pump_ramp_end: float = 0.9  # v_pump(last cell) / nominal v_pump
-
 
     # Slot mode parameters
     include_slot_modes: bool = False
@@ -140,7 +139,10 @@ class SimulationConfig:
         multi_pump = isinstance(self.epsilon, list)
         if multi_pump:
             P = len(self.epsilon)
-            for name, value in (("v_ratio", self.v_ratio), ("omega_pump", self.omega_pump)):
+            for name, value in (
+                ("v_ratio", self.v_ratio),
+                ("omega_pump", self.omega_pump),
+            ):
                 if not isinstance(value, list) or len(value) != P:
                     raise ValueError(
                         f"{name} must be a list of length {P} (matching epsilon) "
@@ -148,9 +150,13 @@ class SimulationConfig:
                     )
             if self.Kmax is not None:
                 if not isinstance(self.Kmax, list) or len(self.Kmax) != P:
-                    raise ValueError(f"Kmax must be a list of length {P} (matching epsilon)")
+                    raise ValueError(
+                        f"Kmax must be a list of length {P} (matching epsilon)"
+                    )
                 if any(k_min > k_max for k_min, k_max in self.Kmax):
-                    raise ValueError(f"each Kmax entry must have k_min <= k_max, got {self.Kmax}")
+                    raise ValueError(
+                        f"each Kmax entry must have k_min <= k_max, got {self.Kmax}"
+                    )
             return  # ks_state / plasma-resonance warnings below are single-pump-only
 
         if self.ks_state:
@@ -220,15 +226,17 @@ class SimulationConfig:
                 return v_nominal
 
             db = -0.1
-            gain = np.arccosh(10**(-db/20))
+            gain = np.arccosh(10 ** (-db / 20))
             vs = self.v_signal
 
             def vp_of(omega_s: np.ndarray) -> np.ndarray:
                 return -vs / (2 * omega_s / self.omega_pump + 1)
 
             def attenuation_of(omega_s: np.ndarray, vp: np.ndarray) -> np.ndarray:
-                return -(self.epsilon**2) / 4 * (
-                    omega_s**2 / vs**2 + self.omega_pump * omega_s / vp / vs
+                return (
+                    -(self.epsilon**2)
+                    / 4
+                    * (omega_s**2 / vs**2 + self.omega_pump * omega_s / vp / vs)
                 )
 
             step_frac = 0.02
@@ -256,9 +264,9 @@ class SimulationConfig:
             vp = vp_of(omega_s_target)
             attenuation = attenuation_of(omega_s_target, vp)
             ncells = np.ceil(gain / np.sqrt(attenuation) / self.cell_size).astype(int)
-            
+
             log.info(f"Ncell list = {ncells}")
-         
+
             self.ncell = int(ncells.sum())
             max_allowed_cells = 2500
             if self.ncell > max_allowed_cells:
@@ -276,7 +284,6 @@ class SimulationConfig:
         if isinstance(self.v_ratio, list):
             return [v_of(vr) for vr in self.v_ratio]
         return v_of(self.v_ratio)
-
 
     @property
     def propagation_direction(self) -> float:

@@ -49,7 +49,7 @@ def numerical_stability_checks(backend: str = "numpy"):
         omega_c=3.4 * 2 * np.pi,
         v_ratio=2.5,
         freq_min=3,
-        freq_max=7  ,
+        freq_max=7,
         n_freqs=100,
         disorder=False,
         epsilon_nramp=0.0,
@@ -64,7 +64,9 @@ def numerical_stability_checks(backend: str = "numpy"):
     sim = Simulation(JTLDiscrete, cfg, backend=backend)
 
     # --- shared cascade data ---
-    T_grid = sim.get_transfer_matrix_grid()  # (Nf, Nc, N, N), symbolic transfer matrix per cell
+    T_grid = (
+        sim.get_transfer_matrix_grid()
+    )  # (Nf, Nc, N, N), symbolic transfer matrix per cell
     T_abcd = np.linalg.inv(T_grid)  # the ABCD convention actually fed to ABCD_to_S
     S_cells = sim.get_s_cells()  # (Nf, Nc, N, N), per-cell S, pre-cascade
     S_total = cascade_all(S_cells, backend=backend)  # raw (un-normalized) total S
@@ -74,8 +76,13 @@ def numerical_stability_checks(backend: str = "numpy"):
     check_transfer_matrix_determinant(T_abcd, tolerance=1e-10)
 
     # 2. Photon-flux conservation (diagonal of the Manley-Rowe identity)
-    flux = check_photon_flux_conservation(S_ph, cfg.omegas, cfg.omega_pump, cfg.ks_state)
-    log.test("Photon-flux conservation: max |flux - eta| = %.3e", np.abs(np.abs(flux) - 1).max())
+    flux = check_photon_flux_conservation(
+        S_ph, cfg.omegas, cfg.omega_pump, cfg.ks_state
+    )
+    log.test(
+        "Photon-flux conservation: max |flux - eta| = %.3e",
+        np.abs(np.abs(flux) - 1).max(),
+    )
 
     # 3. Full pseudo-unitarity matrix (diagonal + off-diagonal terms)
     check_pseudo_unitarity(S_ph, cfg.omegas, cfg.omega_pump, cfg.ks_state)
@@ -98,7 +105,9 @@ def numerical_stability_checks(backend: str = "numpy"):
     ax_cond.semilogy(np.arange(1, cond.shape[1] + 1), cond[45], marker=".")
     ax_cond.set_xlabel("Cascade step (cell index)")
     ax_cond.set_ylabel(r"cond$(I - S_{2,11} S_{1,22})$")
-    ax_cond.set_title(f"Redheffer-star conditioning (Gap center: {cfg.freqs[45]:.2f} GHz)")
+    ax_cond.set_title(
+        f"Redheffer-star conditioning (Gap center: {cfg.freqs[45]:.2f} GHz)"
+    )
     ax_cond.grid(True, alpha=0.3, which="both")
 
     plot_gain_vs_ncell(S_cells, backend=backend, ax=ax_gain)
@@ -110,7 +119,7 @@ def numerical_stability_checks(backend: str = "numpy"):
         cfg.freqs,
         port_out=1,
         port_in=0,
-        cell_indices=[Nc // 10, 2 * Nc // 6, Nc-1],
+        cell_indices=[Nc // 10, 2 * Nc // 6, Nc - 1],
         backend=backend,
         ax=ax_s,
     )

@@ -77,11 +77,15 @@ def single_vs_dual_pump(cell_topology: str = "pi", backend=None, dashboard=False
         **common,
     )
 
-    sim_single = Simulation(JTLDiscrete, cfg_single, backend=backend, cell_topology=cell_topology)
-    sim_dual = Simulation(JTLDiscreteMultiPump, cfg_dual, backend=backend, cell_topology=cell_topology)
+    sim_single = Simulation(
+        JTLDiscrete, cfg_single, backend=backend, cell_topology=cell_topology
+    )
+    sim_dual = Simulation(
+        JTLDiscreteMultiPump, cfg_dual, backend=backend, cell_topology=cell_topology
+    )
 
     S_single = sim_single.get_s_matrix(normalize=True).array  # (Nf, 2n, 2n)
-    S_dual = sim_dual.get_s_matrix(normalize=True).array      # (Nf, 2D, 2D)
+    S_dual = sim_dual.get_s_matrix(normalize=True).array  # (Nf, 2D, 2D)
 
     freqs = cfg_single.freqs  # cfg_dual shares the same freq_min/max/n_freqs
 
@@ -125,14 +129,30 @@ def single_vs_dual_pump(cell_topology: str = "pi", backend=None, dashboard=False
     # --- matplotlib: S-parameter overlay + signal-transmission error ---
     fig, (ax, ax_err) = plt.subplots(2, 1, figsize=(8, 8), sharex=True)
 
-    ax.plot(freqs, S_signal_single, color="tab:blue", label=r"single-pump $M=2$: signal $\rightarrow$ signal")
     ax.plot(
-        freqs, S_idler_single, color="tab:blue", ls="--",
+        freqs,
+        S_signal_single,
+        color="tab:blue",
+        label=r"single-pump $M=2$: signal $\rightarrow$ signal",
+    )
+    ax.plot(
+        freqs,
+        S_idler_single,
+        color="tab:blue",
+        ls="--",
         label=r"single-pump $M=2$: signal $\rightarrow$ idler ($2\omega_p$)",
     )
-    ax.plot(freqs, S_signal_dual, color="tab:orange", label=r"dual-pump: signal $\rightarrow$ signal")
     ax.plot(
-        freqs, S_idler_dual, color="tab:orange", ls="--",
+        freqs,
+        S_signal_dual,
+        color="tab:orange",
+        label=r"dual-pump: signal $\rightarrow$ signal",
+    )
+    ax.plot(
+        freqs,
+        S_idler_dual,
+        color="tab:orange",
+        ls="--",
         label=r"dual-pump: signal $\rightarrow$ idler ($\omega_{p1}+\omega_{p2}$)",
     )
     ax.set_ylabel(r"$|S|^2$ (dB)")
@@ -146,10 +166,14 @@ def single_vs_dual_pump(cell_topology: str = "pi", backend=None, dashboard=False
     S_err = S_signal_single - S_signal_dual
     rms_err = np.sqrt(np.mean(S_err**2))
     ax_err.axhline(0, color="0.4", lw=1.0)
-    ax_err.plot(freqs, S_err, color="#C0392B", lw=1.5, label=f"RMS error = {rms_err:.2f} dB")
+    ax_err.plot(
+        freqs, S_err, color="#C0392B", lw=1.5, label=f"RMS error = {rms_err:.2f} dB"
+    )
     ax_err.set_xlabel("Signal frequency (GHz)")
     ax_err.set_ylabel(r"$S_{signal}$ error (dB)")
-    ax_err.set_title(r"Signal transmission (left $\rightarrow$ right) error: single-pump $-$ dual-pump")
+    ax_err.set_title(
+        r"Signal transmission (left $\rightarrow$ right) error: single-pump $-$ dual-pump"
+    )
     ax_err.legend()
     ax_err.grid(True, alpha=0.3)
 
@@ -158,12 +182,14 @@ def single_vs_dual_pump(cell_topology: str = "pi", backend=None, dashboard=False
     # save_all(prefix="compare_single_vs_dual_pump", fmt="svg")
     plt.show()
 
-
     if dashboard:
         Dashboard(
             [S_single, S_dual],
             freqs=freqs,
-            labels=[f"single-pump (M=2, fp={fp:.1f} GHz)", f"dual-pump (fp1=fp2={fp:.1f} GHz)"],
+            labels=[
+                f"single-pump (M=2, fp={fp:.1f} GHz)",
+                f"dual-pump (fp1=fp2={fp:.1f} GHz)",
+            ],
             port_labels=[
                 port_labels_from_ks_state(cfg_single.ks_state),
                 port_labels_from_multipump(cfg_dual.omega_pump, cfg_dual.Kmax),

@@ -32,17 +32,52 @@ multi-pump run (`models.jtl_discrete_multipump.JTLDiscreteMultiPump`), pass
 
 from __future__ import annotations
 
+import contextlib
 import os
 import pickle
+import signal
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 import numpy as np
 
 _APP_PATH = Path(__file__).resolve().parent / "app.py"
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+
+
+def _free_port(port: int) -> None:
+    """
+    Kill any leftover process already bound to `port`.
+
+    Streamlit only auto-picks a different port when none was requested;
+    since `run()` always passes `--server.port` explicitly, a stale
+    dashboard process still holding the port (e.g. the previous run wasn't
+    Ctrl+C'd) makes the next launch fail outright instead of reusing the
+    port. Only processes whose command line mentions "streamlit" are
+    killed, so an unrelated program on the same port is left alone.
+    """
+    try:
+        result = subprocess.run(
+            ["lsof", "-ti", f"tcp:{port}"], capture_output=True, text=True
+        )
+    except FileNotFoundError:
+        return  # lsof not available; best-effort only
+    pids = result.stdout.split()
+
+    for pid in pids:
+        cmdline = subprocess.run(
+            ["ps", "-p", pid, "-o", "command="], capture_output=True, text=True
+        ).stdout
+        if "streamlit" not in cmdline:
+            continue
+        with contextlib.suppress(ProcessLookupError):
+            os.kill(int(pid), signal.SIGTERM)
+
+    if pids:
+        time.sleep(0.5)
 
 
 def _venv_python() -> str:
@@ -101,7 +136,9 @@ def port_labels_from_multipump(
         if all(k == 0 for k in state):
             names.append("signal")
         else:
-            offsets = ", ".join(f"p{p + 1}={k:+d}" for p, k in enumerate(state) if k != 0)
+            offsets = ", ".join(
+                f"p{p + 1}={k:+d}" for p, k in enumerate(state) if k != 0
+            )
             names.append(f"idler ({offsets})")
     return [f"{n} left" for n in names] + [f"{n} right" for n in names]
 
@@ -122,7 +159,9 @@ class Dashboard:
         Kmax: list[tuple[int, int]] | None = None,
         port_labels: list[str] | list[list[str]] | None = None,
     ):
-        s_matrices = [np.asarray(getattr(S, "array", S), dtype=complex) for S in s_matrices]
+        s_matrices = [
+            np.asarray(getattr(S, "array", S), dtype=complex) for S in s_matrices
+        ]
         n = len(s_matrices)
 
         if isinstance(freqs, (list, tuple)):
@@ -136,9 +175,13 @@ class Dashboard:
             if S.ndim != 3 or S.shape[1] != S.shape[2]:
                 raise ValueError(f"Each S-matrix must be (Nf, N, N), got {S.shape}")
             if f.shape[0] != S.shape[0]:
-                raise ValueError(f"freqs length {f.shape[0]} does not match Nf={S.shape[0]}")
+                raise ValueError(
+                    f"freqs length {f.shape[0]} does not match Nf={S.shape[0]}"
+                )
 
-        labels = list(labels) if labels is not None else [f"run{i + 1}" for i in range(n)]
+        labels = (
+            list(labels) if labels is not None else [f"run{i + 1}" for i in range(n)]
+        )
         if len(labels) != n:
             raise ValueError(f"Got {n} S-matrices but {len(labels)} labels")
 
@@ -148,12 +191,16 @@ class Dashboard:
         # `port_labels`/`ks_state` may be a single list shared by every run,
         # or one list per run.
         if port_labels is not None:
-            if len(port_labels) == n and all(isinstance(x, (list, tuple)) for x in port_labels):
+            if len(port_labels) == n and all(
+                isinstance(x, (list, tuple)) for x in port_labels
+            ):
                 port_labels_list = [list(x) for x in port_labels]
             else:
                 port_labels_list = [list(port_labels)] * n
         elif ks_state is not None:
-            if len(ks_state) == n and all(isinstance(x, (list, tuple)) for x in ks_state):
+            if len(ks_state) == n and all(
+                isinstance(x, (list, tuple)) for x in ks_state
+            ):
                 ks_state_list = [list(x) for x in ks_state]
             else:
                 ks_state_list = [list(ks_state)] * n
@@ -163,7 +210,9 @@ class Dashboard:
                 raise ValueError("`omega_pump` and `Kmax` must be given together")
             port_labels_list = [port_labels_from_multipump(omega_pump, Kmax)] * n
         else:
-            port_labels_list = [[f"port {p + 1}" for p in range(S.shape[1])] for S in s_matrices]
+            port_labels_list = [
+                [f"port {p + 1}" for p in range(S.shape[1])] for S in s_matrices
+            ]
 
         for S, pl in zip(s_matrices, port_labels_list):
             if len(pl) != S.shape[1]:
@@ -181,10 +230,20 @@ class Dashboard:
         Serialize the runs to a temp file and launch `streamlit run` on
         them. Blocks until the dashboard process is stopped (Ctrl+C),
         like `plt.show()`.
+
+        Runs headless (no auto-opened browser tab): since every call reuses
+        the same fixed `port` (freeing it from a leftover run if needed),
+        leaving one browser tab open at that URL across repeated
+        Ctrl+C/rerun cycles just reconnects it to the new run instead of
+        piling up a new tab each time.
         """
         with tempfile.NamedTemporaryFile(suffix=".pkl", delete=False) as f:
             pickle.dump(self.runs, f)
             data_path = f.name
+
+        _free_port(port)
+
+        print(f"Dashboard: http://localhost:{port}  (leave this tab open; reruns reuse it)")
 
         cmd = [
             _venv_python(),
@@ -196,6 +255,8 @@ class Dashboard:
             "localhost",
             "--server.port",
             str(port),
+            "--server.headless",
+            "true",
             "--",
             "--data",
             data_path,

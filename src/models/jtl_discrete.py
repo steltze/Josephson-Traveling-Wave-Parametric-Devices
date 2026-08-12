@@ -32,19 +32,20 @@ class JTLDiscrete:
         -------
         list[CellImmitance], length config.ncell
         """
-        v_p = config.v_pump    
+        v_p = config.v_pump
         ncell = config.ncell
+        print(f"NUmber of cells {ncell}")
 
         if cell_topology == "L":
             ns = np.zeros(ncell)
-            ns[1:] = np.arange(ncell-1)
+            ns[1:] = np.arange(ncell - 1)
         else:
             ns = np.arange(ncell)
 
         a = config.cell_size
 
         ZR = config.Z0 * np.ones(ncell)
- 
+
         L = ZR / config.omega_cutoff * 2
         C = 2 * 1.0 / (config.omega_cutoff * ZR)
         Cs_jj = 1.0 / (
@@ -78,7 +79,7 @@ class JTLDiscrete:
         thetas = w_p / v_p * ns * a
 
         M = config.M
-        w_s = np.asarray(config.omegas)   # (Nf,)
+        w_s = np.asarray(config.omegas)  # (Nf,)
         Nf = len(w_s)
         n = len(config.ks_state)
 
@@ -91,7 +92,6 @@ class JTLDiscrete:
             _L, _wj, _eps, _th = L[i], wj[i], epsilons[i], thetas[i]
             _C = C_end
 
-            
             # Sideband frequencies for each signal freq: (Nf, n)
             omega_sb = w_s[:, None] + np.array(config.ks_state)[None, :] * w_p
 

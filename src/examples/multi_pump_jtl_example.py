@@ -16,6 +16,7 @@ from logger import get_logger, setup_logging
 
 log = get_logger(__name__)
 
+
 def two_pump_jtl(cell_topology: str = "pi", backend=None, dashboard=False):
     """
     One JTL modulated by two independent pump tones at once (see
@@ -45,7 +46,7 @@ def two_pump_jtl(cell_topology: str = "pi", backend=None, dashboard=False):
         cell_size=10e-6,
         omega_cutoff=2 * 50 / 540e-3,
         omega_j=60 * 2 * np.pi,
-        omega_pump = [10.0 * 2 * np.pi, 13.2 * 2 * np.pi],
+        omega_pump=[10.0 * 2 * np.pi, 13.2 * 2 * np.pi],
         epsilon=[0.05, 0.05],
         v_ratio=[2.5, -6.0],
         Kmax=[(-1, 1), (-1, 1)],
@@ -59,7 +60,9 @@ def two_pump_jtl(cell_topology: str = "pi", backend=None, dashboard=False):
         cfg.omega_pump[1] / (2 * np.pi),
     )
 
-    sim = Simulation(JTLDiscreteMultiPump, cfg, backend=backend, cell_topology=cell_topology)
+    sim = Simulation(
+        JTLDiscreteMultiPump, cfg, backend=backend, cell_topology=cell_topology
+    )
     S_total = sim.get_s_matrix(normalize=True).array  # (Nf, N, N)
 
     # Flat lattice index of each tracked (k1, k2) state, in the same
@@ -71,7 +74,7 @@ def two_pump_jtl(cell_topology: str = "pi", backend=None, dashboard=False):
     idler1_idx = labels.index((0, 1))
     # idler2_idx = labels.index((0, 1))
     # idler3_idx = labels.index((1, 1))
-    
+
     freqs = cfg.freqs
     S31_signal = np.abs(S_total[:, D + signal_idx, signal_idx]) ** 2
     S_idler1 = np.abs(S_total[:, signal_idx, D + signal_idx]) ** 2
@@ -87,15 +90,23 @@ def two_pump_jtl(cell_topology: str = "pi", backend=None, dashboard=False):
     # analysis.checks.check_photon_flux_conservation. Port frequencies are
     # signed (an idler can sit at a negative omega_s + k.omega_p), so this
     # is a stronger, more physically meaningful check than plain unitarity.
-    check = check_photon_flux_conservation(S_total, cfg.omegas, cfg.omega_pump, cfg.Kmax)  # (Nf, N)
+    check = check_photon_flux_conservation(
+        S_total, cfg.omegas, cfg.omega_pump, cfg.Kmax
+    )  # (Nf, N)
     port_omegas_half = np.stack(
         [multipump_frequency_grid(ws, cfg.omega_pump, cfg.Kmax)[0] for ws in cfg.omegas]
     )  # (Nf, D)
-    eta = np.sign(np.concatenate([port_omegas_half, port_omegas_half], axis=1))  # (Nf, N)
+    eta = np.sign(
+        np.concatenate([port_omegas_half, port_omegas_half], axis=1)
+    )  # (Nf, N)
     residual = np.abs(check)  # (Nf, N) -- should sit near machine precision
 
     fig, (ax, ax2) = plt.subplots(2, 1, figsize=(8, 9), sharex=True)
-    ax.plot(freqs, 10 * np.log10(S31_signal + 1e-15), label=r"signal left $\rightarrow$ signal right")
+    ax.plot(
+        freqs,
+        10 * np.log10(S31_signal + 1e-15),
+        label=r"signal left $\rightarrow$ signal right",
+    )
     ax.plot(
         freqs,
         10 * np.log10(S_idler1 + 1e-15),

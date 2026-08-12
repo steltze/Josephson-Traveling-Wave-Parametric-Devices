@@ -71,7 +71,7 @@ def _discrete_vs_continuous(
     central_band = cfg.ks_state.index(0)
     # idler_band = cfg.ks_state.index(idler_ks)
     transmitted_band = central_band + len(cfg.ks_state)
-    S21_disc = np.abs(S[:, transmitted_band-1, central_band]) ** 2
+    S21_disc = np.abs(S[:, transmitted_band - 1, central_band]) ** 2
     S31_disc = np.abs(S[:, transmitted_band, central_band]) ** 2
 
     # Ports with a negative signed frequency (idlers, ks<0) are pseudo-unitary
@@ -213,7 +213,9 @@ def _discrete_vs_continuous(
     _vline(ax_err)
     ax_err.set_xlabel("Frequency (GHz)")
     ax_err.set_ylabel(r"$S_{s_L \rightarrow s_R}$ error (dB)")
-    ax_err.set_title(r"Signal transmission $S_{s_L \rightarrow s_R}$: model discrepancy")
+    ax_err.set_title(
+        r"Signal transmission $S_{s_L \rightarrow s_R}$: model discrepancy"
+    )
     ax_err.legend(loc="best", frameon=True)
     ax_err.grid(True, which="major", alpha=0.3)
     ax_err.minorticks_on()

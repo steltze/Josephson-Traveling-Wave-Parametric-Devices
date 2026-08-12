@@ -57,7 +57,9 @@ def _symmetric_single_mode_matrix_batch(Zs: np.ndarray, Yg: np.ndarray) -> np.nd
 
 
 @numba.njit(parallel=True, cache=True)
-def _single_mode_matrix_grid_batch(Zs_stack: np.ndarray, Yg_stack: np.ndarray, is_L: bool) -> np.ndarray:
+def _single_mode_matrix_grid_batch(
+    Zs_stack: np.ndarray, Yg_stack: np.ndarray, is_L: bool
+) -> np.ndarray:
     """Fused over both frequency and cell axes -- see `NumbaBackend.single_mode_matrix_grid`."""
     Nf, Nc, m, _ = Zs_stack.shape
     T = np.empty((Nf, Nc, 2 * m, 2 * m), dtype=np.complex128)
@@ -66,7 +68,9 @@ def _single_mode_matrix_grid_batch(Zs_stack: np.ndarray, Yg_stack: np.ndarray, i
             if is_L:
                 T[f, c] = _single_mode_matrix_single(Zs_stack[f, c], Yg_stack[f, c])
             else:
-                T[f, c] = _symmetric_single_mode_matrix_single(Zs_stack[f, c], Yg_stack[f, c])
+                T[f, c] = _symmetric_single_mode_matrix_single(
+                    Zs_stack[f, c], Yg_stack[f, c]
+                )
     return T
 
 
@@ -83,25 +87,25 @@ def _slot_mode_matrix_single(
     Zeros = np.zeros((m, m), dtype=np.complex128)
     T = np.empty((4 * m, 4 * m), dtype=np.complex128)
     # ---- row 1 : V'_n = V'_{n+1} - Zs_slot @ I_s_{n+1} ----
-    T[0 * m:1 * m, 0 * m:1 * m] = I
-    T[0 * m:1 * m, 1 * m:2 * m] = Zeros
-    T[0 * m:1 * m, 2 * m:3 * m] = -Zs_slot
-    T[0 * m:1 * m, 3 * m:4 * m] = Zeros
+    T[0 * m : 1 * m, 0 * m : 1 * m] = I
+    T[0 * m : 1 * m, 1 * m : 2 * m] = Zeros
+    T[0 * m : 1 * m, 2 * m : 3 * m] = -Zs_slot
+    T[0 * m : 1 * m, 3 * m : 4 * m] = Zeros
     # ---- row 2 : V_n = V_{n+1} - Zs @ I_{n+1} ----
-    T[1 * m:2 * m, 0 * m:1 * m] = Zeros
-    T[1 * m:2 * m, 1 * m:2 * m] = I
-    T[1 * m:2 * m, 2 * m:3 * m] = Zeros
-    T[1 * m:2 * m, 3 * m:4 * m] = -Zs
+    T[1 * m : 2 * m, 0 * m : 1 * m] = Zeros
+    T[1 * m : 2 * m, 1 * m : 2 * m] = I
+    T[1 * m : 2 * m, 2 * m : 3 * m] = Zeros
+    T[1 * m : 2 * m, 3 * m : 4 * m] = -Zs
     # ---- row 3 : I_s update (KCL at the slot node) ----
-    T[2 * m:3 * m, 0 * m:1 * m] = -(Yg_slot + Yi_coupling)
-    T[2 * m:3 * m, 1 * m:2 * m] = Yi_coupling
-    T[2 * m:3 * m, 2 * m:3 * m] = I + (Yg_slot + Yi_coupling) @ Zs_slot
-    T[2 * m:3 * m, 3 * m:4 * m] = -Yi_coupling @ Zs
+    T[2 * m : 3 * m, 0 * m : 1 * m] = -(Yg_slot + Yi_coupling)
+    T[2 * m : 3 * m, 1 * m : 2 * m] = Yi_coupling
+    T[2 * m : 3 * m, 2 * m : 3 * m] = I + (Yg_slot + Yi_coupling) @ Zs_slot
+    T[2 * m : 3 * m, 3 * m : 4 * m] = -Yi_coupling @ Zs
     # ---- row 4 : I update (KCL at the main node) ----
-    T[3 * m:4 * m, 0 * m:1 * m] = Yi_coupling
-    T[3 * m:4 * m, 1 * m:2 * m] = -(Yg + Yi_coupling)
-    T[3 * m:4 * m, 2 * m:3 * m] = -Yi_coupling @ Zs_slot
-    T[3 * m:4 * m, 3 * m:4 * m] = I + (Yg + Yi_coupling) @ Zs
+    T[3 * m : 4 * m, 0 * m : 1 * m] = Yi_coupling
+    T[3 * m : 4 * m, 1 * m : 2 * m] = -(Yg + Yi_coupling)
+    T[3 * m : 4 * m, 2 * m : 3 * m] = -Yi_coupling @ Zs_slot
+    T[3 * m : 4 * m, 3 * m : 4 * m] = I + (Yg + Yi_coupling) @ Zs
     return T
 
 
@@ -116,7 +120,9 @@ def _slot_mode_matrix_batch(
     Nf, m, _ = Zs.shape
     T = np.empty((Nf, 4 * m, 4 * m), dtype=np.complex128)
     for f in numba.prange(Nf):
-        T[f] = _slot_mode_matrix_single(Zs[f], Yg[f], Zs_slot[f], Yg_slot[f], Yi_coupling[f])
+        T[f] = _slot_mode_matrix_single(
+            Zs[f], Yg[f], Zs_slot[f], Yg_slot[f], Yi_coupling[f]
+        )
     return T
 
 
@@ -164,7 +170,9 @@ def _abcd_to_s_single(abcd: np.ndarray, z0: np.ndarray) -> np.ndarray:
     # `numba.prange` threads, so the saved allocations multiply by Nf.
     M = np.empty((N, N), dtype=np.complex128)
     M[:k, :k] = A @ Cinv
-    M[:k, k:] = A @ Cinv @ D - B  # block form; A@Cinv@D != (A@D)@Cinv unless C,D commute
+    M[:k, k:] = (
+        A @ Cinv @ D - B
+    )  # block form; A@Cinv@D != (A@D)@Cinv unless C,D commute
     M[k:, :k] = Cinv
     M[k:, k:] = CinvD
 
@@ -278,9 +286,13 @@ class NumbaBackend(Backend):
     name = "numba"
 
     def single_mode_matrix(self, Zs: np.ndarray, Yg: np.ndarray) -> np.ndarray:
-        return _single_mode_matrix_batch(np.ascontiguousarray(Zs), np.ascontiguousarray(Yg))
+        return _single_mode_matrix_batch(
+            np.ascontiguousarray(Zs), np.ascontiguousarray(Yg)
+        )
 
-    def symmetric_single_mode_matrix(self, Zs: np.ndarray, Yg: np.ndarray) -> np.ndarray:
+    def symmetric_single_mode_matrix(
+        self, Zs: np.ndarray, Yg: np.ndarray
+    ) -> np.ndarray:
         return _symmetric_single_mode_matrix_batch(
             np.ascontiguousarray(Zs), np.ascontiguousarray(Yg)
         )

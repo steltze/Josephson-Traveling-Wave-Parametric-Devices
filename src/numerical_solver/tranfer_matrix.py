@@ -29,7 +29,9 @@ def single_mode_matrix(Zs, Yg, backend: Backend | str | None = None) -> np.ndarr
     )
 
 
-def symmetric_single_mode_matrix(Zs, Yg, backend: Backend | str | None = None) -> np.ndarray:
+def symmetric_single_mode_matrix(
+    Zs, Yg, backend: Backend | str | None = None
+) -> np.ndarray:
     """
     Per-cell ABCD matrix for the symmetric "pi" (shunt/2-series-shunt/2) topology.
 
@@ -51,7 +53,9 @@ def symmetric_single_mode_matrix(Zs, Yg, backend: Backend | str | None = None) -
     )
 
 
-def slot_mode_matrix(Zs, Yg, Zs_slot, Yg_slot, Yi_coupling, backend: Backend | str | None = None) -> np.ndarray:
+def slot_mode_matrix(
+    Zs, Yg, Zs_slot, Yg_slot, Yi_coupling, backend: Backend | str | None = None
+) -> np.ndarray:
     """
     Per-cell ABCD matrix for the asymmetric slot-mode topology.
 
@@ -82,7 +86,9 @@ def slot_mode_matrix(Zs, Yg, Zs_slot, Yg_slot, Yi_coupling, backend: Backend | s
     )
 
 
-def single_mode_matrix_grid(cells, topology, backend: Backend | str | None = None) -> np.ndarray:
+def single_mode_matrix_grid(
+    cells, topology, backend: Backend | str | None = None
+) -> np.ndarray:
     """
     Build the per-cell, per-frequency ABCD matrix grid for a whole cascade.
 

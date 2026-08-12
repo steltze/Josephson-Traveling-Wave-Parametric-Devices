@@ -9,7 +9,10 @@ import matplotlib.pyplot as plt
 from logger import get_logger, setup_logging
 from simulation import SimulationConfig, Simulation
 from models import JTLDiscrete
-from analysis.checks import check_transfer_matrix_determinant, check_photon_flux_conservation
+from analysis.checks import (
+    check_transfer_matrix_determinant,
+    check_photon_flux_conservation,
+)
 from dashboard import Dashboard
 
 log = get_logger(__name__)
@@ -32,28 +35,30 @@ def julia_comparison(dashboard):
         omega_c=3.4
         * 2
         * np.pi,  # gap: well in the S parameter from signal to tranmission
-        v_ratio=-2.5, # > 0 => co-propagating, < 0 => counter-propagating
+        v_ratio=-2.5,  # > 0 => co-propagating, < 0 => counter-propagating
         freq_min=1,  # GHz
         freq_max=12,  # GHz
-        n_freqs = 500,
+        n_freqs=500,
         disorder=False,
-        epsilon_nramp=0, # where the peak will be
+        epsilon_nramp=0,  # where the peak will be
         adiabatic_pump=False,
     )
 
     log.info("omega_pump = %.3f GHz", cfg.omega_pump / (2 * np.pi))
     log.info("omega_cutoff = %.3f GHz", cfg.omega_cutoff / (2 * np.pi))
 
-    sim = Simulation(JTLDiscrete, cfg, backend="numpy", cell_topology = "pi")
+    sim = Simulation(JTLDiscrete, cfg, backend="numpy", cell_topology="pi")
     S_params = sim.get_s_matrix(normalize=True).array
-    
+
     T_grid = sim.get_transfer_matrix_grid()
 
     _, _ = check_transfer_matrix_determinant(T_grid, tolerance=1e-10)
-    
+
     sim.plot_dispersion_relation()
 
-    flux_conservation_S = check_photon_flux_conservation(S_params, cfg.omegas, cfg.omega_pump, cfg.ks_state)
+    flux_conservation_S = check_photon_flux_conservation(
+        S_params, cfg.omegas, cfg.omega_pump, cfg.ks_state
+    )
     _, ax = plt.subplots()
 
     signal_left_index = ks_state.index(0)
@@ -70,7 +75,12 @@ def julia_comparison(dashboard):
     if dashboard:
         dashboard_runs = [S_params]
         dashboard_labels = ["TWPC"]
-        Dashboard(dashboard_runs, freqs=cfg.freqs, labels=dashboard_labels, ks_state=cfg.ks_state).run()
+        Dashboard(
+            dashboard_runs,
+            freqs=cfg.freqs,
+            labels=dashboard_labels,
+            ks_state=cfg.ks_state,
+        ).run()
 
 
 if __name__ == "__main__":

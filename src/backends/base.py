@@ -40,7 +40,9 @@ class Backend(ABC):
         """
 
     @abstractmethod
-    def symmetric_single_mode_matrix(self, Zs: np.ndarray, Yg: np.ndarray) -> np.ndarray:
+    def symmetric_single_mode_matrix(
+        self, Zs: np.ndarray, Yg: np.ndarray
+    ) -> np.ndarray:
         """
         Per-cell ABCD matrix for the symmetric "pi" (shunt/2-series-shunt/2) topology.
 
@@ -132,7 +134,11 @@ class Backend(ABC):
             return T_grid
 
         T_grid = np.empty((Nf, Ncells, 2 * m, 2 * m), dtype=complex)
-        fn = self.single_mode_matrix if topology == "L" else self.symmetric_single_mode_matrix
+        fn = (
+            self.single_mode_matrix
+            if topology == "L"
+            else self.symmetric_single_mode_matrix
+        )
         for c, cell in enumerate(cells):
             T_grid[:, c] = fn(cell.Zs_harm_fn, cell.Yg_harm_fn)
         return T_grid

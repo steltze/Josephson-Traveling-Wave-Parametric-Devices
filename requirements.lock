@@ -16,6 +16,7 @@ packaging==26.2
 pathspec==1.1.1
 pillow==12.2.0
 platformdirs==4.9.6
+plotly==6.9.0
 pluggy==1.6.0
 Pygments==2.20.0
 pyparsing==3.3.2
@@ -26,5 +27,6 @@ pytokens==0.4.1
 ruff==0.15.13
 scipy==1.17.1
 six==1.17.0
+streamlit==1.61.1
 sympy==1.14.0
 typing_extensions==4.15.0

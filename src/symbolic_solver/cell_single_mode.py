@@ -355,7 +355,7 @@ class CellSingleMode:
 
         # Normalise: arrays → (syms, precomputed_values); lists → (syms, None)
         if isinstance(Zs_m_p, np.ndarray):
-            Zs_arr_p = np.asarray(Zs_m_p, dtype=complex)       # (M, Nf)
+            Zs_arr_p = np.asarray(Zs_m_p, dtype=complex)  # (M, Nf)
             Zs_arr_m = np.asarray(Zs_m_m, dtype=complex)
             Zs_syms_p, Zs_syms_m, _, _ = self._make_harmonic_functions(len(Zs_arr_p))
         else:
@@ -363,7 +363,7 @@ class CellSingleMode:
             Zs_syms_p, Zs_syms_m = Zs_m_p, Zs_m_m
 
         if isinstance(Yg_m_p, np.ndarray):
-            Yg_arr_p = np.asarray(Yg_m_p, dtype=complex)       # (M, Nf)
+            Yg_arr_p = np.asarray(Yg_m_p, dtype=complex)  # (M, Nf)
             Yg_arr_m = np.asarray(Yg_m_m, dtype=complex)
             _, _, Yg_syms_p, Yg_syms_m = self._make_harmonic_functions(len(Yg_arr_p))
         else:
@@ -391,25 +391,29 @@ class CellSingleMode:
                 n_sb = cell.Zs_harm_fn.shape[1]
                 k_stepped_up = k + np.abs(N_min)
 
-                subs[self.Zs0(self.omega[k])] = cell.Zs_harm_fn[:, k_stepped_up, k_stepped_up] if 0 <= k_stepped_up < n_sb else zeros
+                subs[self.Zs0(self.omega[k])] = (
+                    cell.Zs_harm_fn[:, k_stepped_up, k_stepped_up]
+                    if 0 <= k_stepped_up < n_sb
+                    else zeros
+                )
                 subs[self.Yg0(self.omega[k])] = cell.Yg0_fn(omega_k)
 
                 # subs[self.Zs0(self.omega[k])] = cell.Zs0_fn(omega_k)
                 # subs[self.Yg0(self.omega[k])] = cell.Yg0_fn(omega_k)
-                for mi, (Zm_p, Zm_m) in enumerate(
-                    zip(Zs_syms_p, Zs_syms_m), start=1
-                ):
+                for mi, (Zm_p, Zm_m) in enumerate(zip(Zs_syms_p, Zs_syms_m), start=1):
                     if Zs_arr_p is not None:
                         val_p = Zs_arr_p[mi - 1]
                         val_m = Zs_arr_m[mi - 1]
-                    elif isinstance(cell.Zs_harm_fn, np.ndarray) and cell.Zs_harm_fn.ndim == 3:
+                    elif (
+                        isinstance(cell.Zs_harm_fn, np.ndarray)
+                        and cell.Zs_harm_fn.ndim == 3
+                    ):
                         # Full coupling matrix (Nf, n_sb, n_sb): [:, target, source]
                         # Zm_p: source=k, target=k+mi (exp(+I*mi*theta), lower source)
                         # Zm_m: source=k, target=k-mi (exp(-I*mi*theta), upper source)
 
                         k_fwd, k_bwd = k_stepped_up + mi, k_stepped_up - mi
                         val_p = (
-
                             cell.Zs_harm_fn[:, k_fwd, k_stepped_up]
                             if 0 <= k_stepped_up < n_sb and 0 <= k_fwd < n_sb
                             else zeros
@@ -423,13 +427,14 @@ class CellSingleMode:
                         val_p = val_m = cell.Zs_harm_fn(mi, omega_k)
                     subs[Zm_p(self.omega[k])] = val_p
                     subs[Zm_m(self.omega[k])] = val_m
-                for mi, (Ym_p, Ym_m) in enumerate(
-                    zip(Yg_syms_p, Yg_syms_m), start=1
-                ):
+                for mi, (Ym_p, Ym_m) in enumerate(zip(Yg_syms_p, Yg_syms_m), start=1):
                     if Yg_arr_p is not None:
                         val_p = Yg_arr_p[mi - 1]
                         val_m = Yg_arr_m[mi - 1]
-                    elif isinstance(cell.Yg_harm_fn, np.ndarray) and cell.Yg_harm_fn.ndim == 3:
+                    elif (
+                        isinstance(cell.Yg_harm_fn, np.ndarray)
+                        and cell.Yg_harm_fn.ndim == 3
+                    ):
                         # Full coupling matrix (Nf, n_sb, n_sb): [:, target, source]
                         # Ym_p: source=k, target=k+mi (exp(+I*mi*theta), lower source)
                         # Ym_m: source=k, target=k-mi (exp(-I*mi*theta), upper source)

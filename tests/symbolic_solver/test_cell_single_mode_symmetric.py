@@ -80,14 +80,14 @@ def _expected_symmetric_T(Zs0_0, Zs0_1, Zs1p_0, Zs1m_1, Yg0_0, Yg0_1, theta):
             [Yg0_0 * Zs0_0 / 2.0 + 1, Yg0_1 * Zs1m_1 * ep / 2.0, -Zs0_0, -Zs1m_1 * ep],
             [Yg0_0 * Zs1p_0 * em / 2.0, Yg0_1 * Zs0_1 / 2.0 + 1, -Zs1p_0 * em, -Zs0_1],
             [
-                -Yg0_0**2 * Zs0_0 / 4.0 - Yg0_0,
+                -(Yg0_0**2) * Zs0_0 / 4.0 - Yg0_0,
                 -Yg0_0 * Yg0_1 * Zs1m_1 * ep / 4.0,
                 Yg0_0 * Zs0_0 / 2.0 + 1,
                 Yg0_0 * Zs1m_1 * ep / 2.0,
             ],
             [
                 -Yg0_0 * Yg0_1 * Zs1p_0 * em / 4.0,
-                -Yg0_1**2 * Zs0_1 / 4.0 - Yg0_1,
+                -(Yg0_1**2) * Zs0_1 / 4.0 - Yg0_1,
                 Yg0_1 * Zs1p_0 * em / 2.0,
                 Yg0_1 * Zs0_1 / 2.0 + 1,
             ],
@@ -100,8 +100,8 @@ def _expected_symmetric_T(Zs0_0, Zs0_1, Zs1p_0, Zs1m_1, Yg0_0, Yg0_1, theta):
 def T_num_symmetric():
     cell_obj = CellSingleModeSymmetric()
     M, ks_state = 1, [0, 1]
-    T_sym, state_syms, Zs_m_p, Zs_m_m, Yg_m_p, Yg_m_m = cell_obj.build_symbolic_transfer_matrix(
-        M, ks_state
+    T_sym, state_syms, Zs_m_p, Zs_m_m, Yg_m_p, Yg_m_m = (
+        cell_obj.build_symbolic_transfer_matrix(M, ks_state)
     )
     dim = len(state_syms)
     return cell_obj.build_numeric_matrix(
@@ -177,8 +177,8 @@ def T_num_L_cell():
     (series-then-shunt) cell instead of the symmetric Pi cell."""
     cell_obj = CellSingleMode()
     M, ks_state = 1, [0, 1]
-    T_sym, state_syms, Zs_m_p, Zs_m_m, Yg_m_p, Yg_m_m = cell_obj.build_symbolic_transfer_matrix(
-        M, ks_state
+    T_sym, state_syms, Zs_m_p, Zs_m_m, Yg_m_p, Yg_m_m = (
+        cell_obj.build_symbolic_transfer_matrix(M, ks_state)
     )
     dim = len(state_syms)
     return cell_obj.build_numeric_matrix(
@@ -213,7 +213,9 @@ class TestCompareAgainstLCell:
         assert T_num_L_cell[0, 0] == pytest.approx(1.0, abs=1e-12)
         assert T_num_L_cell[1, 1] == pytest.approx(1.0, abs=1e-12)
 
-    def test_topologies_disagree_on_voltage_diagonal(self, T_num_symmetric, T_num_L_cell):
+    def test_topologies_disagree_on_voltage_diagonal(
+        self, T_num_symmetric, T_num_L_cell
+    ):
         """This is the numeric signature that distinguishes the two topologies:
         the Pi cell's extra half-shunt term makes T[0,0] != 1."""
         assert T_num_symmetric[0, 0] != pytest.approx(T_num_L_cell[0, 0], abs=1e-6)

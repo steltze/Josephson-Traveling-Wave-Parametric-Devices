@@ -73,7 +73,6 @@ class Simulation:
         self._model = model_cls()
         self._cell_topology = cell_topology
 
-
         self._T_grid = None
         self._S_cells = None
         self._S_matrix: SMatrix | None = None
@@ -107,10 +106,16 @@ class Simulation:
             # not a flat ks_state -- build the same per-state frequency grid
             # JTLDiscreteMultiPump uses, via multipump_frequency_grid
             # (kron/itertools.product order), one signal frequency at a time.
-            return np.abs(np.stack([
-                multipump_frequency_grid(ws, self._cfg.omega_pump, self._cfg.Kmax)[0]
-                for ws in self._cfg.omegas
-            ]))
+            return np.abs(
+                np.stack(
+                    [
+                        multipump_frequency_grid(
+                            ws, self._cfg.omega_pump, self._cfg.Kmax
+                        )[0]
+                        for ws in self._cfg.omegas
+                    ]
+                )
+            )
         ks = np.asarray(self._cfg.ks_state)
         return np.abs(self._cfg.omegas[:, None] + ks[None, :] * self._cfg.omega_pump)
 
@@ -127,8 +132,12 @@ class Simulation:
                 f"2*{n_half} tracked sideband frequencies -- can't "
                 f"build the photon-flux weight vector."
             )
-        port_omegas_one_side = np.tile(port_omegas_half, (1, blocks_per_side))  # (Nf, N//2)
-        port_omegas = np.concatenate([port_omegas_one_side, port_omegas_one_side], axis=1)  # (Nf, N)
+        port_omegas_one_side = np.tile(
+            port_omegas_half, (1, blocks_per_side)
+        )  # (Nf, N//2)
+        port_omegas = np.concatenate(
+            [port_omegas_one_side, port_omegas_one_side], axis=1
+        )  # (Nf, N)
         return 1 / np.sqrt(port_omegas)
 
     def get_s_matrix(self, normalize: bool = True) -> SMatrix:
@@ -155,14 +164,18 @@ class Simulation:
 
             if normalize:
                 weights = self._photon_flux_weights(self._S_matrix.array.shape[-1])
-                S_ph = self._S_matrix.array / (weights[:, None, :] / weights[:, :, None])
+                S_ph = self._S_matrix.array / (
+                    weights[:, None, :] / weights[:, :, None]
+                )
                 self._S_matrix = SMatrix(S_ph, self._cfg.Z0)
 
             self._S_matrix_normalized = normalize
 
         return self._S_matrix
 
-    def get_s_matrix_slot_terminated(self, gamma: complex, normalize: bool = True) -> SMatrix:
+    def get_s_matrix_slot_terminated(
+        self, gamma: complex, normalize: bool = True
+    ) -> SMatrix:
         """
         Cascaded S-matrix with the slot line's own two ports (input- and
         output-side) eliminated via a reflective one-port termination,
@@ -222,9 +235,11 @@ class Simulation:
             )
         # Port layout (see JTLDiscreteSlotMode / slot_mode_matrix):
         # [slot_in(m), main_in(m), slot_out(m), main_out(m)].
-        slot_idx = np.r_[0:m, 2 * m:3 * m]
+        slot_idx = np.r_[0:m, 2 * m : 3 * m]
 
-        S_reduced = terminate_ports(S_raw, slot_idx, gamma)  # (Nf, 2m, 2m): [main_in, main_out]
+        S_reduced = terminate_ports(
+            S_raw, slot_idx, gamma
+        )  # (Nf, 2m, 2m): [main_in, main_out]
 
         if normalize:
             weights = self._photon_flux_weights(S_reduced.shape[-1])
@@ -259,7 +274,9 @@ class Simulation:
             _, ax = plt.subplots(figsize=(7, 4))
 
         if sideband is not None:
-            alpha, k, eigenvectors = bloch_wavenumbers(T_single, return_eigenvectors=True)
+            alpha, k, eigenvectors = bloch_wavenumbers(
+                T_single, return_eigenvectors=True
+            )
             n_modes = len(self._cfg.ks_state)
             sb_idx = self._cfg.ks_state.index(sideband)
             # rows 0:n_modes of each eigenvector are the V(k) components,

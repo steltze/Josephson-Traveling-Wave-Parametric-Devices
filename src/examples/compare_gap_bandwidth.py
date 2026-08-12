@@ -106,4 +106,3 @@ def compare_gap_bandwidth():
     plt.tight_layout()
     # save_all("compare_gap_bandwidth")
     plt.show()
-

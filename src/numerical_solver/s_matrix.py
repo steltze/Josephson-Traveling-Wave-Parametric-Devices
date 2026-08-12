@@ -32,7 +32,9 @@ def redheffer_star(
     )
 
 
-def cascade_all(S_cells: np.ndarray, backend: Backend | str | None = None) -> np.ndarray:
+def cascade_all(
+    S_cells: np.ndarray, backend: Backend | str | None = None
+) -> np.ndarray:
     """
     Cascade a stack of per-cell S-matrices into one total S-matrix.
 
@@ -85,7 +87,9 @@ def terminate_ports(S: np.ndarray, terminated_idx, gamma: complex) -> np.ndarray
     S = np.asarray(S, dtype=complex)
     Nf, N, _ = S.shape
     terminated_idx = np.asarray(terminated_idx, dtype=int)
-    kept_idx = np.setdiff1d(np.arange(N), terminated_idx)  # sorted, keeps relative order
+    kept_idx = np.setdiff1d(
+        np.arange(N), terminated_idx
+    )  # sorted, keeps relative order
 
     S_AA = S[:, kept_idx[:, None], kept_idx[None, :]]
     if gamma == 0:
@@ -121,11 +125,11 @@ def ABCD_to_S(ABCD: np.ndarray, Z0, backend: Backend | str | None = None) -> np.
 
     # --- per-port reference impedance ---
     Z0 = np.asarray(Z0, dtype=complex)
-    if Z0.ndim == 0:                       # scalar -> broadcast to all ports
+    if Z0.ndim == 0:  # scalar -> broadcast to all ports
         Z0vec = np.full((Nf, N), Z0)
-    elif Z0.ndim == 1:                     # (N,) -> same across frequency
+    elif Z0.ndim == 1:  # (N,) -> same across frequency
         Z0vec = np.broadcast_to(Z0, (Nf, N))
-    else:                                  # (Nf, N)
+    else:  # (Nf, N)
         Z0vec = Z0
 
     S = _resolve_backend(backend).abcd_to_s(ABCD, Z0vec)
@@ -186,7 +190,9 @@ class SMatrix:
         """Port count."""
         return self._data.shape[1]
 
-    def cascade(self, other: "SMatrix", backend: Backend | str | None = None) -> "SMatrix":
+    def cascade(
+        self, other: "SMatrix", backend: Backend | str | None = None
+    ) -> "SMatrix":
         """
         Cascade self (left/input) with other (right/output) via Redheffer star.
 
@@ -200,7 +206,9 @@ class SMatrix:
             raise ValueError(f"Z0 mismatch: {self.Z0} vs {other.Z0}")
         if self.N != other.N:
             raise ValueError(f"Port-count mismatch: {self.N} vs {other.N}")
-        return SMatrix(redheffer_star(other._data, self._data, backend=backend), self.Z0)
+        return SMatrix(
+            redheffer_star(other._data, self._data, backend=backend), self.Z0
+        )
 
     def __matmul__(self, other: "SMatrix") -> "SMatrix":
         """Cascade self (left/input) with other (right/output) via Redheffer star."""

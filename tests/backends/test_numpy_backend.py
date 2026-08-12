@@ -28,7 +28,9 @@ class TestNumpyBackendDirect:
         Zs = np.zeros((Nf, m, m), dtype=complex)
         Yg = np.zeros((Nf, m, m), dtype=complex)
         expected = np.broadcast_to(np.eye(2 * m, dtype=complex), (Nf, 2 * m, 2 * m))
-        np.testing.assert_allclose(backend.symmetric_single_mode_matrix(Zs, Yg), expected)
+        np.testing.assert_allclose(
+            backend.symmetric_single_mode_matrix(Zs, Yg), expected
+        )
 
     def test_abcd_to_s_known_2port_result(self):
         """Same fixture as the module-level ABCD_to_S test, called on the backend directly."""

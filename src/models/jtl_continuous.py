@@ -169,10 +169,10 @@ class JTLContinuous:
         if omegas is None:
             omegas = cfg.omegas
         omegas = np.asarray(omegas, dtype=float)
-        kp = cfg.omega_pump * cfg.cell_size / (cfg.propagation_direction*cfg.v_pump)
+        kp = cfg.omega_pump * cfg.cell_size / (cfg.propagation_direction * cfg.v_pump)
 
         kS = self._k(omegas)
-        kI = cfg.propagation_direction*self._k(self._omega_idler(omegas))
+        kI = cfg.propagation_direction * self._k(self._omega_idler(omegas))
 
         if self.mode == "converter":
             return kS - kI + kp
@@ -239,18 +239,22 @@ class JTLContinuous:
         omega_I = self._omega_idler(omegas)
 
         kS = self._k(omegas)
-        kI = cfg.propagation_direction*self._k(omega_I)
+        kI = cfg.propagation_direction * self._k(omega_I)
         m_eff = 2.0 * cfg.epsilon
         N = cfg.ncell
 
         if self.mode == "converter":
             log.info("Continuous model mode: converter")
 
-            kp = cfg.omega_pump * cfg.cell_size / (cfg.propagation_direction*cfg.v_pump)
+            kp = (
+                cfg.omega_pump
+                * cfg.cell_size
+                / (cfg.propagation_direction * cfg.v_pump)
+            )
             kappa = kS - kI - kp  # ks + kp = ki but kp, ki < 0 so we do -kp, -(-ki)
 
             q_sq = (
-                -m_eff**2 / 16.0 * kS * kI
+                -(m_eff**2) / 16.0 * kS * kI
             )  # no corrections added, (kS - kappa) * (kI + kappa)
 
             N = cfg.ncell
@@ -258,30 +262,43 @@ class JTLContinuous:
             Delta_sqrt = np.emath.sqrt(Delta)
 
             S31 = np.exp(-0.5j * kappa * N) / (
-                    np.cosh(Delta_sqrt * N)
-                    + 0.5j * kappa / Delta_sqrt * np.sinh(Delta_sqrt * N)
-                )
+                np.cosh(Delta_sqrt * N)
+                + 0.5j * kappa / Delta_sqrt * np.sinh(Delta_sqrt * N)
+            )
 
             gS = m_eff / 4.0 * kS  # no correction added, kI / (kI + kappa)
-            S21 = np.exp(0.5j * kappa * N) * gS / Delta_sqrt * np.sinh(Delta_sqrt * N) * S31
+            S21 = (
+                np.exp(0.5j * kappa * N)
+                * gS
+                / Delta_sqrt
+                * np.sinh(Delta_sqrt * N)
+                * S31
+            )
 
         else:
             log.info("Continuous model mode: amplifier")
 
-            kp = cfg.omega_pump * cfg.cell_size / (cfg.propagation_direction*cfg.v_pump)
-            kappa = kS + kI - kp  
-            
+            kp = (
+                cfg.omega_pump
+                * cfg.cell_size
+                / (cfg.propagation_direction * cfg.v_pump)
+            )
+            kappa = kS + kI - kp
+
             q_sq = (m_eff**2) * kI * kS / 16.0
             Delta = q_sq - (kappa / 2.0) ** 2
             Delta_sqrt = np.emath.sqrt(Delta)
 
-            S31 = np.exp(-0.5j * kappa * N) * (np.cosh(Delta_sqrt * N) + 1j * kappa / 2 / Delta_sqrt * np.sinh(Delta_sqrt * N))
+            S31 = np.exp(-0.5j * kappa * N) * (
+                np.cosh(Delta_sqrt * N)
+                + 1j * kappa / 2 / Delta_sqrt * np.sinh(Delta_sqrt * N)
+            )
             S21 = np.conjugate(
-                        np.exp(0.5j * kappa * N)
-                        * (-m_eff / 4.0 * kS)
-                        / Delta_sqrt
-                        * np.sinh(Delta_sqrt * N)
-                    )
+                np.exp(0.5j * kappa * N)
+                * (-m_eff / 4.0 * kS)
+                / Delta_sqrt
+                * np.sinh(Delta_sqrt * N)
+            )
 
         Nf = len(omegas)
         data = np.zeros((Nf, 4, 4), dtype=complex)
