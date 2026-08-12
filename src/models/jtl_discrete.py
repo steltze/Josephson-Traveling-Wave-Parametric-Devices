@@ -32,7 +32,7 @@ class JTLDiscrete:
         -------
         list[CellImmitance], length config.ncell
         """
-            
+        v_p = config.v_pump    
         ncell = config.ncell
 
         if cell_topology == "L":
@@ -70,13 +70,12 @@ class JTLDiscrete:
         else:
             profile = np.ones(ncell)
 
+        epsilons = profile * config.epsilon
+
         wj = 1.0 / np.sqrt(L * Cs_jj)
 
         w_p = config.omega_pump
-        v_p = config.v_pump
         thetas = w_p / v_p * ns * a
-
-        epsilons = np.ones(ncell) * config.epsilon
 
         M = config.M
         w_s = np.asarray(config.omegas)   # (Nf,)

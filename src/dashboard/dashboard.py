@@ -74,7 +74,7 @@ def port_labels_from_ks_state(ks_state: list[int]) -> list[str]:
     k=0 is the signal; k!=0 is an idler at that many pump harmonics away.
     """
     names = ["signal" if k == 0 else f"idler (k={k:+d})" for k in ks_state]
-    return [f"left {n}" for n in names] + [f"right {n}" for n in names]
+    return [f"{n} left" for n in names] + [f"{n} right" for n in names]
 
 
 def port_labels_from_multipump(
@@ -103,7 +103,7 @@ def port_labels_from_multipump(
         else:
             offsets = ", ".join(f"p{p + 1}={k:+d}" for p, k in enumerate(state) if k != 0)
             names.append(f"idler ({offsets})")
-    return [f"left {n}" for n in names] + [f"right {n}" for n in names]
+    return [f"{n} left" for n in names] + [f"{n} right" for n in names]
 
 
 class Dashboard:
