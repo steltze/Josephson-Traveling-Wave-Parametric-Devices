@@ -16,7 +16,7 @@ from logger import get_logger, setup_logging
 
 log = get_logger(__name__)
 
-def two_pump_jtl(cell_topology: str = "pi", backend=None):
+def two_pump_jtl(cell_topology: str = "pi", backend=None, dashboard=False):
     """
     One JTL modulated by two independent pump tones at once (see
     models.jtl_discrete_multipump.JTLDiscreteMultiPump), each doing its
@@ -44,11 +44,11 @@ def two_pump_jtl(cell_topology: str = "pi", backend=None):
         ncell=321,
         cell_size=10e-6,
         omega_cutoff=2 * 50 / 540e-3,
-        omega_j=30 * 2 * np.pi,
-        omega_pump = [6.8 * 2 * np.pi, 7.5 * 2 * np.pi, 8 * 2 * np.pi],
-        epsilon=[0.05, 0.05, 0.05],
-        v_ratio=[-2.5, -2.5, -2.5],
-        Kmax=[(0, 1), (0, 1), (0, 1)],
+        omega_j=60 * 2 * np.pi,
+        omega_pump = [10.0 * 2 * np.pi, 13.2 * 2 * np.pi],
+        epsilon=[0.05, 0.05],
+        v_ratio=[2.5, -6.0],
+        Kmax=[(-1, 1), (-1, 1)],
         freq_min=1,
         freq_max=14,
         n_freqs=500,
@@ -67,14 +67,14 @@ def two_pump_jtl(cell_topology: str = "pi", backend=None):
     # state index p sits at D + p.
     _, labels = multipump_frequency_grid(0.0, cfg.omega_pump, cfg.Kmax)
     D = len(labels)
-    signal_idx = labels.index((0, 0, 0))
-    idler1_idx = labels.index((0, 1, 0))
+    signal_idx = labels.index((0, 0))
+    idler1_idx = labels.index((0, 1))
     # idler2_idx = labels.index((0, 1))
     # idler3_idx = labels.index((1, 1))
     
     freqs = cfg.freqs
     S31_signal = np.abs(S_total[:, D + signal_idx, signal_idx]) ** 2
-    S_idler1 = np.abs(S_total[:, idler1_idx, signal_idx]) ** 2
+    S_idler1 = np.abs(S_total[:, signal_idx, D + signal_idx]) ** 2
     # S_idler2 = np.abs(S_total[:, idler2_idx, signal_idx]) ** 2
     # S_idler3 = np.abs(S_total[:, idler3_idx, signal_idx]) ** 2
 
@@ -95,11 +95,11 @@ def two_pump_jtl(cell_topology: str = "pi", backend=None):
     residual = np.abs(check)  # (Nf, N) -- should sit near machine precision
 
     fig, (ax, ax2) = plt.subplots(2, 1, figsize=(8, 9), sharex=True)
-    ax.plot(freqs, 10 * np.log10(S31_signal + 1e-15), label=r"signal $\rightarrow$ signal")
+    ax.plot(freqs, 10 * np.log10(S31_signal + 1e-15), label=r"signal left $\rightarrow$ signal right")
     ax.plot(
         freqs,
         10 * np.log10(S_idler1 + 1e-15),
-        label=rf"signal $\rightarrow$ idler$_1$ ($\omega_s+\omega_{{p1}}$, $f_{{p1}}={fp1:.2f}$ GHz)",
+        label=rf"signal right $\rightarrow$ signal left",
     )
     # ax.plot(
     #     freqs,
@@ -129,13 +129,14 @@ def two_pump_jtl(cell_topology: str = "pi", backend=None):
     # save_all(prefix="multi_pump_jtl_example", fmt="svg")
     plt.show()
 
-    Dashboard(
-        [S_total],
-        freqs=freqs,
-        labels=[f"two-pump JTL (ε={cfg.epsilon})"],
-        omega_pump=cfg.omega_pump,
-        Kmax=cfg.Kmax,
-    ).run()
+    if dashboard:
+        Dashboard(
+            [S_total],
+            freqs=freqs,
+            labels=[f"two-pump JTL (ε={cfg.epsilon})"],
+            omega_pump=cfg.omega_pump,
+            Kmax=cfg.Kmax,
+        ).run()
 
 
 if __name__ == "__main__":
