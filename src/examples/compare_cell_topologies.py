@@ -56,7 +56,7 @@ def compare_cell_topologies():
     sims = {}
     for topology, cfg in cfgs.items():
         sim = Simulation(JTLDiscrete, cfg, cell_topology=topology)
-        T_grid = sim._get_T_grid()  # (Nf, Nc, dim, dim)
+        T_grid = sim.get_transfer_matrix_grid()  # (Nf, Nc, dim, dim)
         check_transfer_matrix_determinant(T_grid, tolerance=1e-8)
         sims[topology] = sim
 
@@ -98,7 +98,7 @@ def compare_cell_topologies():
     # --- dispersion relation on a single interior cell ---
     fig2, ax = plt.subplots(figsize=(7, 5))
     for topology, color, index in (("L", "C0", 2), ("pi", "C1", 1)):
-        T_grid = sims[topology]._get_T_grid()
+        T_grid = sims[topology].get_transfer_matrix_grid()
         T_cell = T_grid[:, index]  # (Nf, dim, dim)
         _, k = bloch_wavenumbers(T_cell)
         for branch in range(k.shape[1]):

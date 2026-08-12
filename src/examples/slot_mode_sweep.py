@@ -77,7 +77,7 @@ def slot_mode_sweep1():
             sim = Simulation(JTLDiscreteSlotMode, cfg, backend="numpy")
             S_ph = sim.get_s_matrix(normalize=True).array
 
-            T_grid = sim._get_T_grid()
+            T_grid = sim.get_transfer_matrix_grid()
             check_transfer_matrix_determinant(T_grid, tolerance=1e-8)
 
             ax = axes[row, col]
@@ -122,6 +122,7 @@ def slot_mode_sweep2():
         epsilon=0.04, omega_c=3.4*2*np.pi, v_ratio=-2.5,
         freq_min=1, freq_max=12, n_freqs=500, disorder=False, epsilon_nramp=0,
         adiabatic_pump=False,
+        include_slot_modes=True,
         omega_cutoff_slot_mode=1.3*(2*50/540e-3),
         omega_cutoff_coupling=280*2*np.pi,
     )
@@ -158,7 +159,7 @@ def slot_mode_sweep2():
                     # S_ph = sim.get_s_matrix(normalize=True).array
                     S_ph = sim.get_s_matrix_slot_terminated(gamma=gamma, normalize=True).array
 
-                    T_grid = sim._get_T_grid()
+                    T_grid = sim.get_transfer_matrix_grid()
                     check_transfer_matrix_determinant(T_grid, tolerance=1e-8)
 
                     ax = axes[row, col]

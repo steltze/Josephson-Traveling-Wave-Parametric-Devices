@@ -64,7 +64,7 @@ def numerical_stability_checks(backend: str = "numpy"):
     sim = Simulation(JTLDiscrete, cfg, backend=backend)
 
     # --- shared cascade data ---
-    T_grid = sim._get_T_grid()  # (Nf, Nc, N, N), symbolic transfer matrix per cell
+    T_grid = sim.get_transfer_matrix_grid()  # (Nf, Nc, N, N), symbolic transfer matrix per cell
     T_abcd = np.linalg.inv(T_grid)  # the ABCD convention actually fed to ABCD_to_S
     S_cells = sim.get_s_cells()  # (Nf, Nc, N, N), per-cell S, pre-cascade
     S_total = cascade_all(S_cells, backend=backend)  # raw (un-normalized) total S

@@ -70,6 +70,8 @@ class SimulationConfig:
         Shape exponent for the ramp's cell-index axis. 1 = linear; <1
         makes v_pump fall faster early (levelling off later); >1 makes
         it fall faster late (staying near ramp_start longer first).
+    include_slot_modes : bool
+
     omega_cutoff_slot_mode : float
         Slot-line mode cutoff angular frequency (rad/GHz) -- sets the slot
         line's own per-cell Ls, Co the same way `omega_cutoff` sets the
@@ -122,7 +124,9 @@ class SimulationConfig:
     v_pump_ramp_start: float = 1.2  # v_pump(cell 0) / nominal v_pump
     v_pump_ramp_end: float = 0.9  # v_pump(last cell) / nominal v_pump
 
-    # Circuit frequencies (rad/GHz)
+
+    # Slot mode parameters
+    include_slot_modes: bool = False
     omega_cutoff_slot_mode: float = 50 * 2 * np.pi
     omega_cutoff_coupling: float = 50 * 2 * np.pi
 
@@ -214,7 +218,60 @@ class SimulationConfig:
             ramp_start, ramp_end = self.v_pump_ramp_start, self.v_pump_ramp_end
             if not self.adiabatic_pump:
                 return v_nominal
-            return np.linspace(ramp_start * v_nominal, ramp_end * v_nominal, self.ncell)
+
+            db = -0.1
+            gain = np.arccosh(10**(-db/20))
+            vs = self.v_signal
+
+            def vp_of(omega_s: np.ndarray) -> np.ndarray:
+                return -vs / (2 * omega_s / self.omega_pump + 1)
+
+            def attenuation_of(omega_s: np.ndarray, vp: np.ndarray) -> np.ndarray:
+                return -(self.epsilon**2) / 4 * (
+                    omega_s**2 / vs**2 + self.omega_pump * omega_s / vp / vs
+                )
+
+            step_frac = 0.02
+            f_lo, f_hi = 3.5, 4.5  # GHz
+            omega_hi = f_hi * 2 * np.pi
+            omega_targets = [f_lo * 2 * np.pi]
+            while omega_targets[-1] < omega_hi:
+                w = omega_targets[-1]
+                delta_omega = 2 * vs * np.sqrt(attenuation_of(w, vp_of(w)))
+                if not np.isfinite(delta_omega) or delta_omega <= 0:
+                    raise ValueError(
+                        f"Non-positive/invalid gain bandwidth at ω/2π={w / (2 * np.pi):.3f} GHz "
+                        "-- check epsilon/omega_pump for this target range."
+                    )
+                w_next = w + delta_omega * step_frac
+                if w_next >= omega_hi:
+                    break
+                omega_targets.append(w_next)
+            if omega_targets[-1] < omega_hi - 1e-9:
+                omega_targets.append(omega_hi)
+            omega_s_target = np.array(omega_targets)
+
+            # print(omega_s_target/2/np.pi)
+
+            vp = vp_of(omega_s_target)
+            attenuation = attenuation_of(omega_s_target, vp)
+            ncells = np.ceil(gain / np.sqrt(attenuation) / self.cell_size).astype(int)
+            
+            log.info(f"Ncell list = {ncells}")
+         
+            self.ncell = int(ncells.sum())
+            max_allowed_cells = 2500
+            if self.ncell > max_allowed_cells:
+                log.critical(f"Ncell = {self.ncell} > {max_allowed_cells}, exiting...")
+                exit()
+            log.info(f"Ncell list = {ncells.sum()}")
+            vp_profile = np.repeat(vp, ncells)
+            # import matplotlib.pyplot as plt
+            # plt.plot(np.arange(self.ncell), vs/vp_profile)
+            # plt.show()
+            # exit()
+            return vp_profile
+            # return np.linspace(ramp_start * v_nominal, ramp_end * v_nominal, self.ncell)
 
         if isinstance(self.v_ratio, list):
             return [v_of(vr) for vr in self.v_ratio]

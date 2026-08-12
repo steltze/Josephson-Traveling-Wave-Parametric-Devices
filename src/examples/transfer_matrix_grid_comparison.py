@@ -67,7 +67,7 @@ def _signal_s_matrix(cfg, T_grid):
     same cascade + photon-flux normalization as `Simulation.get_s_matrix`.
     """
     sim = Simulation(JTLDiscrete, cfg, cell_topology="L")
-    sim._T_grid = T_grid  # bypass _get_T_grid(); reuse its cascade/normalize logic
+    sim._T_grid = T_grid  # bypass get_transfer_matrix_grid(); reuse its cascade/normalize logic
     return sim.get_s_matrix().array
 
 
@@ -88,7 +88,7 @@ def compare_transfer_matrix_implementations():
       Zs/Yg sideband-coupling matrices (`Component.impedance_matrix`, which
       combines the JJ inductor and its self-capacitance via an *exact*
       `np.linalg.inv` of the parallel combination). This is the path
-      `Simulation._get_T_grid` actually uses.
+      `Simulation.get_transfer_matrix_grid` actually uses.
     - `CellSingleMode.build_cell_freq_matrices` (symbolic_solver/cell_single_mode.py):
       derives the same matrix by symbolically expanding the ladder recursion
       into per-harmonic Fourier coefficients up to order M and substituting

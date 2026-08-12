@@ -31,7 +31,7 @@ def two_pump_jtl(cell_topology: str = "pi", backend=None, dashboard=False):
     symmetric about 0.
 
     Uses the `Simulation` class with `cell_cls=JTLDiscreteMultiPump`.
-    `Simulation._get_T_grid` only calls `cell_cls.build` +
+    `Simulation.get_transfer_matrix_grid` only calls `cell_cls.build` +
     `single_mode_matrix_grid`, so it's agnostic to whether the lattice is
     the single-pump flat `ks_state` or the multi-pump tensor lattice.
     `get_s_matrix`'s photon-flux normalization is now multi-pump-aware too

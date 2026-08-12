@@ -52,7 +52,7 @@ def harmonics_comparison():
         )
 
         sim = Simulation(JTLDiscrete, cfg)
-        T_grid = sim._get_T_grid()
+        T_grid = sim.get_transfer_matrix_grid()
         _, _ = check_transfer_matrix_determinant(T_grid, tolerance=1e-12)
 
         S_matrix = sim.get_s_matrix().array

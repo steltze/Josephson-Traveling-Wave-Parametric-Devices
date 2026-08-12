@@ -52,7 +52,7 @@ def compare_dispersion_relations():
 
     # --- discrete: same as plot_dispersion_relation — use interior (middle) cell ---
     sim = Simulation(JTLDiscrete, cfg)
-    T_grid = sim._get_T_grid()              # (Nf, Nc, dim, dim)
+    T_grid = sim.get_transfer_matrix_grid()              # (Nf, Nc, dim, dim)
     T_cell = T_grid[:, ncell // 2]         # middle interior cell, shape (Nf, 2, 2)
     _, k_disc = bloch_wavenumbers(T_cell)  # (Nf, 2): [+k, -k] after descending sort
 

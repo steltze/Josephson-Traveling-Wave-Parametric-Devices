@@ -58,7 +58,7 @@ class Simulation:
         cell_cls,
         config,
         backend: Backend | str | None = None,
-        cell_topology: str = "L",
+        cell_topology: str = "pi",
     ) -> None:
         self._cell_cls = cell_cls
         self._cfg = config
@@ -73,40 +73,12 @@ class Simulation:
         self._model = model_cls()
         self._cell_topology = cell_topology
 
-        self._T_sym = None
-        self._state_syms = None
-        self._Zs_m_p = None
-        self._Zs_m_m = None
-        self._Yg_m_p = None
-        self._Yg_m_m = None
+
         self._T_grid = None
         self._S_cells = None
         self._S_matrix: SMatrix | None = None
         self._S_matrix_normalized: bool | None = None
         self._S_matrix_raw_full: np.ndarray | None = None
-
-    def get_symbolic_matrix(self):
-        """
-        Build (and cache) the symbolic transfer matrix.
-
-        Returns
-        -------
-        T_sym : sympy Matrix
-        state_syms : list of sympy expressions
-        """
-        if self._T_sym is None:
-            with _timer("Symbolic transfer matrix"):
-                (
-                    self._T_sym,
-                    self._state_syms,
-                    self._Zs_m_p,
-                    self._Zs_m_m,
-                    self._Yg_m_p,
-                    self._Yg_m_m,
-                ) = self._model.build_symbolic_transfer_matrix(
-                    self._cfg.M, self._cfg.ks_state
-                )
-        return self._T_sym, self._state_syms
 
     def get_s_cells(self) -> np.ndarray:
         """
@@ -120,7 +92,7 @@ class Simulation:
         reducing it to a single total S-matrix.
         """
         if self._S_cells is None:
-            T_grid = self._get_T_grid()  # (Nf, Nc, N, N)
+            T_grid = self.get_transfer_matrix_grid()  # (Nf, Nc, N, N)
             Nf, Nc, N, _ = T_grid.shape
             Z0 = self._cfg.Z0
             self._S_cells = ABCD_to_S(
@@ -144,17 +116,7 @@ class Simulation:
 
     def _photon_flux_weights(self, N: int) -> np.ndarray:
         """
-        Photon-flux normalization weights 1/sqrt(omega_k), shape (Nf, N).
-
-        Ordinary cascades have N = 2*n_half ports (n_half tracked sidebands
-        x 2 physical ends). Slot-mode cascades (extra internal [V', I_s]
-        conductor -- see JTLDiscreteSlotMode) interleave a second conductor
-        at each end that carries the *same* Floquet sideband frequencies,
-        so N = 4*n_half = 2*(2*n_half): each end's port block is
-        [slot(n_half), main(n_half)], both weighted from the same
-        port_omegas_half. blocks_per_side generalizes this instead of
-        hardcoding 1x or 2x, so it stays correct if more coupled conductors
-        are added later.
+        Photon-flux normalization weights.
         """
         port_omegas_half = self._port_omegas_half()
         n_half = port_omegas_half.shape[-1]
@@ -241,6 +203,10 @@ class Simulation:
         SMatrix, shape (Nf, 2m, 2m), ports ordered [main_in, main_out]
         (same layout as an ordinary non-slot-mode `get_s_matrix` result).
         """
+        if not self._cfg.include_slot_modes:
+            log.error("Slot mode analysis not activated...exiting.")
+            exit()
+
         if self._S_matrix_raw_full is None:
             with _timer("S-matrix cascade"):
                 S_cells = self.get_s_cells()
@@ -285,7 +251,7 @@ class Simulation:
             only Bloch modes dominated by that sideband's voltage component
             are plotted. Default (None) plots every mode.
         """
-        T_grid = self._get_T_grid()  # (Nf, Nc, dim, dim)
+        T_grid = self.get_transfer_matrix_grid()  # (Nf, Nc, dim, dim)
         idx = cell_idx if cell_idx is not None else self._cfg.ncell // 2
         T_single = T_grid[:, idx]  # (Nf, dim, dim)
 
@@ -318,50 +284,14 @@ class Simulation:
         ax.grid(True, alpha=0.25)
         return ax
 
-    def plot_s_parameters(
-        self,
-        params: Sequence[Tuple[int, int]],
-        ax: plt.Axes | None = None,
-        **kwargs,
-    ) -> plt.Axes:
-        """
-        Plot selected S-parameters in dB vs frequency.
-
-        Parameters
-        ----------
-        params : list of (i, j) 1-based index pairs, e.g. [(3,1), (1,1)]
-        ax : matplotlib Axes or None
-        """
-        normalize = kwargs.pop("normalize", False)
-        k = kwargs.pop("k", 0.0)
-
-        S = self.get_s_matrix(normalize=normalize)
-        return _plot_s_params(S.array, self._cfg.freqs+k*self._cfg.omega_pump/2.0/np.pi, params, ax=ax, **kwargs)
-
-    def _get_T_grid(self) -> np.ndarray:
+    def get_transfer_matrix_grid(self) -> np.ndarray:
         """Evaluate T_sym on the full (Nf, Nc) grid; cached after first call."""
         if self._T_grid is None:
-            # T_sym, _ = self.get_symbolic_matrix()
             cells = self._cell_cls.build(self._cfg, cell_topology=self._cell_topology)
-            # dim = len(self._state_syms)
             with _timer("Numerical cell matrices"):
                 self._T_grid = single_mode_matrix_grid(
                     cells,
                     self._cell_topology,
                     backend=self._backend,
                 )
-                
-                # self._T_grid = self._model.build_cell_freq_matrices(
-                #     T_sym,
-                #     dim,
-                #     self._cfg.M,
-                #     self._cfg.ks_state,
-                #     self._Zs_m_p,
-                #     self._Zs_m_m,
-                #     self._Yg_m_p,
-                #     self._Yg_m_m,
-                #     self._cfg.omegas,
-                #     self._cfg.omega_pump,
-                #     cells,
-                # )
         return self._T_grid
