@@ -9,48 +9,15 @@ from scipy.optimize import brentq
 
 from numerical_solver.s_matrix import SMatrix
 from analysis.s_parameters import plot_s_parameters as _plot_s_params
+from models.dispersion_relations import (
+    dispersion_linear,
+    dispersion_linear_with_plasma,
+    dispersion_bloch,
+    dispersion_bloch_with_plasma,
+)
 from logger import get_logger
 
 log = get_logger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# Dispersion relations — uniform signature (omegas, omega_cutoff, omega_j)
-# ---------------------------------------------------------------------------
-
-
-def dispersion_linear(
-    omegas: np.ndarray, omega_cutoff: float, omega_j: float = np.inf
-) -> np.ndarray:
-    """k·a = 2ω/ωc  (pure linear, no JJ)."""
-    return 2.0 * np.asarray(omegas, dtype=float) / omega_cutoff
-
-
-def dispersion_linear_with_plasma(
-    omegas: np.ndarray, omega_cutoff: float, omega_j: float
-) -> np.ndarray:
-    """k·a = 2ω/ωc / √(1 - ω²/ωj²)  (linear + JJ correction)."""
-    w = np.asarray(omegas, dtype=float)
-    return 2.0 * w / (omega_cutoff * np.sqrt(1.0 - (w / omega_j) ** 2))
-
-
-def dispersion_bloch(
-    omegas: np.ndarray, omega_cutoff: float, omega_j: float = np.inf
-) -> np.ndarray:
-    """k·a = 2·arcsin(ω/ωc)  (exact discrete LC ladder, no JJ)."""
-    return 2.0 * np.arcsin(
-        np.clip(np.asarray(omegas, dtype=float) / omega_cutoff, 0.0, 1.0)
-    )
-
-
-def dispersion_bloch_with_plasma(
-    omegas: np.ndarray, omega_cutoff: float, omega_j: float
-) -> np.ndarray:
-    """k·a = arccos(1 - 2(ω/ωc)² / (1 - ω²/ωj²))  (full discrete JTL)."""
-    w = np.asarray(omegas, dtype=float)
-    denom = 1.0 - (w / omega_j) ** 2
-    arg = 1.0 - 2.0 * (w / omega_cutoff) ** 2 / denom
-    return np.arccos(arg)
 
 
 # ---------------------------------------------------------------------------
@@ -72,7 +39,7 @@ class JTLContinuous:
         sim = JTLContinuous(cfg, dispersion_fn=dispersion_bloch)
         sim = JTLContinuous.with_dispersion(dispersion_linear)(cfg)
 
-    Dispersion options (all in models/jtl_continuous.py):
+    Dispersion options (all in models/dispersion_relations.py):
         dispersion_linear               k = 2ω/ωc
         dispersion_linear_with_plasma   k = 2ω/ωc / √(1-ω²/ωj²)
         dispersion_bloch                k = 2·arcsin(ω/ωc)

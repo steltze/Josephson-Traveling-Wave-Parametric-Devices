@@ -2,8 +2,8 @@ from .cell import CellImmitance
 from .jtl_discrete import JTLDiscrete
 from .jtl_discrete_slot_mode import JTLDiscreteSlotMode
 from .jtl_discrete_multipump import JTLDiscreteMultiPump
-from .jtl_continuous import (
-    JTLContinuous,
+from .jtl_continuous import JTLContinuous
+from .dispersion_relations import (
     dispersion_linear,
     dispersion_linear_with_plasma,
     dispersion_bloch,

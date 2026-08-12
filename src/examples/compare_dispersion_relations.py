@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from logger import get_logger, setup_logging
 from simulation import SimulationConfig, Simulation
 from models import JTLDiscrete
-from models.jtl_continuous import dispersion_linear, dispersion_linear_with_plasma
+from models.dispersion_relations import dispersion_linear, dispersion_linear_with_plasma
 from analysis.dispersion_relation import bloch_wavenumbers
 from examples.utils import save_all
 

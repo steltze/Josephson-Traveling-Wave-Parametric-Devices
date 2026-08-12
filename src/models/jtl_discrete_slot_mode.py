@@ -4,6 +4,7 @@ import numpy as np
 
 from models.cell import CellImmitance
 from models.electrical_elements import Component, ModulatedInductor, Capacitor, Inductor
+from models.dispersion_relations import dispersion_bloch
 
 
 class JTLDiscreteSlotMode:
@@ -75,7 +76,9 @@ class JTLDiscreteSlotMode:
 
         w_p = config.omega_pump
         v_p = config.v_pump
-        thetas = w_p / v_p * ns * a
+
+        thetas = np.sign(config.v_ratio)*dispersion_bloch(w_p, config.omega_cutoff*config.v_ratio) * ns
+
 
         M = config.M
         w_s = np.asarray(config.omegas)  # (Nf,)
