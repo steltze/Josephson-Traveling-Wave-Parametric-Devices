@@ -36,7 +36,7 @@ def slot_mode_sweep():
         v_ratio=-2.5,
         freq_min=1,
         freq_max=12,
-        n_freqs=5000,
+        n_freqs=500,
         disorder=False,
         epsilon_nramp=0,
         adiabatic_pump=False,

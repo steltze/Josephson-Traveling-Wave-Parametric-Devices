@@ -77,10 +77,9 @@ class JTLDiscrete:
         wj = 1.0 / np.sqrt(L * Cs_jj)
 
         w_p = config.omega_pump
-        # thetas = w_p / v_p * ns * a
+        thetas = w_p / v_p * ns * a
 
-        thetas = np.sign(config.v_ratio)*dispersion_bloch(w_p, config.omega_cutoff*config.v_ratio) * ns
-
+        # thetas = np.sign(config.v_ratio)*dispersion_bloch(w_p, config.omega_cutoff/config.v_ratio) * ns
 
         M = config.M
         w_s = np.asarray(config.omegas)  # (Nf,)
@@ -101,13 +100,15 @@ class JTLDiscrete:
 
             Zs_harm_arr = np.zeros((Nf, n, n), dtype=complex)
             if not first:
+                if (i % 600 == 0) and (i != 0):
                 # Exact parallel-LC series impedance: JJ inductor || self-capacitance
-                Ccap_val = 1.0 / (_wj**2 * _L)
-                squid = Component.parallel(
-                    ModulatedInductor(L0=_L, eps=_eps, order=M, theta=_th),
-                    Capacitor(Ccap_val),
-                )
-                Zs_harm_arr = squid.impedance_matrix(omega_sb)  # (Nf, n, n)
+                    Ccap_val = 1.0 / (_wj**2 * _L)
+                    squid = ModulatedInductor(L0=_L, eps=_eps, order=M, theta=_th)
+                       
+                    Zs_harm_arr = squid.impedance_matrix(omega_sb)  # (Nf, n, n)
+                else:
+                    regular_inductor = Inductor(L=_L)
+                    Zs_harm_arr = regular_inductor.impedance_matrix(omega_sb)
 
             # Shunt-to-ground capacitor: unmodulated, so it doesn't couple
             # sidebands -- its harmonic matrix is diagonal.

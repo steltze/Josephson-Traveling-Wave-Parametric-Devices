@@ -5,7 +5,7 @@
 import numpy as np
 
 def dispersion_linear(
-    omegas: np.ndarray, omega_cutoff: float, omega_j: float = np.inf
+    omegas: np.ndarray, omega_cutoff: float
 ) -> np.ndarray:
     """k·a = 2ω/ωc  (pure linear, no JJ)."""
     return 2.0 * np.asarray(omegas, dtype=float) / omega_cutoff
@@ -20,7 +20,7 @@ def dispersion_linear_with_plasma(
 
 
 def dispersion_bloch(
-    omegas: np.ndarray, omega_cutoff: float, omega_j: float = np.inf
+    omegas: np.ndarray, omega_cutoff: float
 ) -> np.ndarray:
     """k·a = 2·arcsin(ω/ωc)  (exact discrete LC ladder, no JJ)."""
     w = np.asarray(omegas, dtype=float)
@@ -35,4 +35,4 @@ def dispersion_bloch_with_plasma(
     w = np.asarray(omegas, dtype=float)
     denom = 1.0 - (w / omega_j) ** 2
     arg = 1.0 - 2.0 * (w / omega_cutoff) ** 2 / denom
-    return 
+    return np

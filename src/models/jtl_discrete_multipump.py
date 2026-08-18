@@ -103,8 +103,9 @@ class JTLDiscreteMultiPump:
         epsilons = [profile * eps_j for eps_j in config.epsilon]  # P x (ncell,)
         wj = 1.0 / np.sqrt(L * Cs_jj)
 
+        thetas = [w_p[j] / v_p[j] * ns * a for j in range(P)]  # P x (ncell,)
 
-        thetas = [np.sign(config.v_ratio[j])*dispersion_bloch(w_p[j], config.omega_cutoff*config.v_ratio[j])* ns for j in range(P)]  # P x (ncell,)
+        # thetas = [np.sign(config.v_ratio[j])*dispersion_bloch(w_p[j], config.omega_cutoff/config.v_ratio[j])* ns for j in range(P)]  # P x (ncell,)
 
         Kmax = list(config.Kmax)
         n_sb = n_sidebands_from_Kmax(Kmax)

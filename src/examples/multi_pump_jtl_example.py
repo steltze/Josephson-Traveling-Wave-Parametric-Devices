@@ -52,13 +52,14 @@ def two_pump_jtl(cell_topology: str = "pi", backend=None, dashboard=False):
         Kmax=[(-1, 1), (-1, 1)],
         freq_min=1,
         freq_max=14,
-        n_freqs=500,
+        n_freqs=200,
     )
     log.info(
         "pump frequencies: %.3f GHz, %.3f GHz",
         cfg.omega_pump[0] / (2 * np.pi),
         cfg.omega_pump[1] / (2 * np.pi),
     )
+    log.info(f"omega cutoff: {cfg.omega_cutoff / (2 * np.pi)}")
 
     sim = Simulation(
         JTLDiscreteMultiPump, cfg, backend=backend, cell_topology=cell_topology
