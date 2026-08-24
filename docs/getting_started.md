@@ -2,24 +2,25 @@
 
 ## Installation
 
-You need **Python 3.10+**. No other tools are required.
+Dependencies are managed with [uv](https://docs.astral.sh/uv/). See the
+[README](../README.md#installation) for install instructions on Linux,
+macOS, and Windows. Once uv is installed:
 
 ```bash
 git clone https://github.com/your-username/your-repo.git
 cd your-repo
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.lock
+uv sync
 ```
 
-`requirements.lock` pins the exact versions everyone else uses. For the
-latest compatible versions instead, use `pip install -r requirements.txt`.
+`uv.lock` pins the exact versions everyone else uses, and `uv sync` creates
+and manages `.venv` for you. Run scripts with `uv run`, e.g.
+`uv run pytest`, without manually activating the environment.
 
 Two extras are available:
 
 ```bash
-pip install .[numba]      # JIT-compiled backend for the ABCD/S-matrix solvers
-pip install .[dashboard]  # interactive Streamlit S-parameter viewer
+uv sync --extra numba      # JIT-compiled backend for the ABCD/S-matrix solvers
+uv sync --extra dashboard  # interactive Streamlit S-parameter viewer
 ```
 
 ## Quickstart
