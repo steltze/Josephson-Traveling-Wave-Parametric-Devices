@@ -71,15 +71,13 @@ class JTLDiscrete:
             profile = ramp_up * ramp_down
         else:
             profile = np.ones(ncell)
-
-        epsilons = profile * config.epsilon
-
+        
         wj = 1.0 / np.sqrt(L * Cs_jj)
 
         w_p = config.omega_pump
-        thetas = w_p / v_p * ns * a
+        # thetas = w_p / v_p * ns * a
 
-        # thetas = np.sign(config.v_ratio)*dispersion_bloch(w_p, config.omega_cutoff*config.v_ratio) * ns
+        thetas = np.sign(config.v_ratio)*dispersion_bloch(w_p, config.omega_cutoff / config.v_ratio) * ns
 
 
         M = config.M
@@ -87,24 +85,40 @@ class JTLDiscrete:
         Nf = len(w_s)
         n = len(config.ks_state)
 
+        from scipy.special import jv   # Bessel function of the first kind J_n
+        a = np.pi * config.phi_dc_frac
+        b = np.pi * config.phi_rf_frac
+        J = [jv(p, b) for p in range(M + 1)]
+
+        prefactor = 2.0 / L[0]
+        c = {}
+        c[0] = prefactor * np.cos(a) * J[0]                      # identity (DC) coefficient
+        for m in range(1, M+1):
+            if m % 2 == 0:   # even
+                c[m] = prefactor * np.cos(a) * 2*(-1)**(m//2) * J[m]
+            else:            # odd
+                c[m] = -prefactor * np.sin(a) * 2*(-1)**((m-1)//2) * J[m]
+
         cells = []
         for i in range(ncell):
             first = cell_topology == "L" and i == 0
 
             halve_end = cell_topology == "L" and (i == 0 or i == ncell - 1)
             C_end = C[i] / (2.0 if halve_end else 1.0)
-            _L, _wj, _eps, _th = L[i], wj[i], epsilons[i], thetas[i]
+            _L, _wj, _th = L[i], wj[i], thetas[i]
             _C = C_end
 
             # Sideband frequencies for each signal freq: (Nf, n)
             omega_sb = w_s[:, None] + np.array(config.ks_state)[None, :] * w_p
 
+            coeffs_cell = {p: profile[i] * c[p] for p in range(1, M + 1)}
+            coeffs_cell[0] = c[0]
             Zs_harm_arr = np.zeros((Nf, n, n), dtype=complex)
             if not first:
                 # Exact parallel-LC series impedance: JJ inductor || self-capacitance
                 Ccap_val = 1.0 / (_wj**2 * _L)
                 squid = Component.parallel(
-                    ModulatedInductor(L0=_L, eps=_eps, order=M, theta=_th),
+                    ModulatedInductor(coeffs=coeffs_cell, theta=_th, order=M),
                     Capacitor(Ccap_val),
                 )
                 Zs_harm_arr = squid.impedance_matrix(omega_sb)  # (Nf, n, n)

@@ -30,7 +30,28 @@ class SimulationConfig:
     epsilon : float | list[float]
         Pump modulation depth of the series inductance. A single pump tone
         (float) or, for a multi-pump line, one depth per pump (length P) —
-        see models.jtl_discrete_multipump.JTLDiscreteMultiPump.
+        used by models.jtl_discrete_multipump.JTLDiscreteMultiPump and
+        models.jtl_discrete_slot_mode.JTLDiscreteSlotMode. JTLDiscrete
+        does NOT use this field -- it takes its pump amplitude from
+        `phi_rf_frac`/`phi_dc_frac` instead (see below), the physical
+        flux-fraction parametrization, rather than mixing the two
+        conventions.
+    phi_rf_frac : float
+        Physical pump AC flux drive, Phi_RF / Phi0 (mirrors
+        JosephsonCircuits.jl's `Phi_ac_frac`). JTLDiscrete's pump
+        amplitude -- together with `phi_dc_frac`, sets the exact
+        Jacobi-Anger/Bessel-function coefficients of the pump-driven
+        junction's critical current (see ModulatedInductor): `eps` in that
+        expansion is `pi*phi_rf_frac`.
+    phi_dc_frac : float
+        SQUID DC flux bias point, Phi_dc / Phi0 (mirrors JosephsonCircuits.jl's
+        `Phi_dc_frac`). Together with `phi_rf_frac` this sets the exact
+        Jacobi-Anger/Bessel-function coefficients of the pump-driven
+        junction's critical current (see ModulatedInductor): self-Kerr
+        (pump renormalizing its own mean inductance) scales as
+        cos(pi*phi_dc_frac), and the 3-wave-mixing strength as
+        sin(pi*phi_dc_frac) -- zero at zero bias, maximal at 0.25
+        (quarter flux quantum, the standard 3WM operating point).
     omega_c : float
         Target centre angular frequency for phase matching (rad/GHz).
     v_ratio : float | list[float]
@@ -101,6 +122,8 @@ class SimulationConfig:
 
     # Pump (float = single tone; list[float] length P = multi-pump)
     epsilon: float | list[float] = 0.0
+    phi_rf_frac: float = 0.0
+    phi_dc_frac: float = 0.25
     omega_c: float = 5 * 2 * np.pi
     v_ratio: float | list[float] = 3.0
     omega_pump: float | list[float] | None = None  # None → v_ratio * omega_c

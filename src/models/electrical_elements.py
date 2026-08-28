@@ -16,10 +16,10 @@ def band_coupling_phased(n: int, offset: int, theta: float) -> np.ndarray:
     if abs(offset) >= n or offset == 0:
         return M
     idx = np.arange(n - abs(offset))
-    M[idx, idx + abs(offset)] = np.exp(
+    M[idx, idx + abs(offset)] = 0.5*np.exp(
         1j * abs(offset) * theta
     )  # target < source: down-shift
-    M[idx + abs(offset), idx] = np.exp(
+    M[idx + abs(offset), idx] = 0.5*np.exp(
         -1j * abs(offset) * theta
     )  # target > source: up-shift
     return M
@@ -125,51 +125,40 @@ class Capacitor(Component):
 
 class ModulatedInductor(Component):
     """
-    Pump-modulated (Josephson) inductor.
+    Pump-modulated (Josephson) inductor, specified by the ABSOLUTE inverse-
+    inductance harmonics.
 
-    The bare inductance is modulated by a pump tone cos(w_p t - theta),
-    coupling sidebands through the (n, n) matrix
+        Linv(t) = sum_{p>=0} c[p] * cos(p*theta)   [1/henry]
 
-        L / L0 = I + sum_{p=1}^{order} eps^p * coeffs[p] * band_coupling_phased(n, p, theta)
+    so the inverse-inductance matrix over sidebands is
 
-    `theta` is the pump's propagation phase at this cell's position
-    (e.g. omega_pump/v_pump * z).
+        Linv_mat = c[0]*I + sum_{p>=1} c[p] * band_coupling_phased(n, p, theta)
 
-    impedance(omega) = j * Omega @ (L0 * L/L0), where Omega = diag(omega)
-    over the trailing axis of `omega`. Unlike a plain Inductor/Capacitor,
-    `omega` here must already be the per-sideband frequency grid — shape
-    (n,) for one signal frequency or (Nf, n) batched — since building that
-    grid (e.g. omega_signal + k*omega_pump for k in ks_state) requires
-    knowing which sidebands the surrounding circuit tracks, not just this
-    one element.
+    and the series impedance is  Z = j*Omega * L = j*Omega * inv(Linv_mat).
+
+    `coeffs` must include the DC term as coeffs[0] (the identity coefficient),
+    and coeffs[p] for p>=1 are the harmonic couplings. All have units 1/H.
     """
 
-    def __init__(self, L0, eps, order=1, coeffs=None, theta=0.0):
-        self.L0 = L0
-        self.eps = eps
+    def __init__(self, coeffs, theta=0.0, order=None):
         self.theta = theta
-        self.coeffs = (
-            coeffs if coeffs is not None else {p: 1.0 for p in range(1, order + 1)}
-        )
+        self.coeffs = coeffs           # {0: c0, 1: c1, ...} in 1/H
+        self.order = order if order is not None else max(coeffs)
 
     def impedance(self, omega):
         omega = np.atleast_2d(np.asarray(omega, dtype=float))  # (Nf, n)
         Nf, n = omega.shape
 
-        L = np.eye(n, dtype=complex)
-        for p, a in self.coeffs.items():
-            L = L + (self.eps**p) * a * band_coupling_phased(n, p, self.theta)
+        # build the inverse-inductance matrix (1/H)
+        Linv = self.coeffs.get(0, 0.0) * np.eye(n, dtype=complex)
+        for p, c in self.coeffs.items():
+            if p == 0:
+                continue
+            Linv = Linv + c * band_coupling_phased(n, p, self.theta)
 
-        # Omega = diag(omega); Omega @ M is row-scaling, not a real matmul --
-        # done via broadcasting instead of materializing a mostly-zero
-        # (Nf,n,n) diagonal matrix and paying an O(Nf n^3) batched matmul
-        # for what's really an O(Nf n^2) elementwise scale.
-        #
-        # Always keep the batch axis, even when Nf == 1: squeezing it away
-        # would make this (n, n) result indistinguishable in ndim from the
-        # elementwise (Nf, n) per-sideband arrays plain components return,
-        # which is exactly what `_is_matrix` relies on to tell the two apart.
-        return 1j * omega[:, :, None] * (self.L0 * L)[None, :, :]
+        # invert to get L, then Z = j*Omega*L
+        Lmat = np.linalg.inv(Linv)                      # (n, n)
+        return 1j * omega[:, :, None] * Lmat[None, :, :]
 
 
 class _Combination(Component):

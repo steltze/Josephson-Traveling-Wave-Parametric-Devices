@@ -28,13 +28,13 @@ def julia_comparison(dashboard):
         ks_state=ks_state,
         ncell=ncell,
         cell_size=10e-6,
-        omega_cutoff=2 * 50 / 540e-3,  # L = 530 pH, C = 212 fF -> ~30 GHz
+        omega_cutoff=2 * 50 / 530e-3,  # L = 530 pH, C = 212 fF -> ~30 GHz
         omega_pump=6.8 * 2 * np.pi,
         omega_j=60 * 2 * np.pi,  # usually smaller
-        epsilon=0.04,  # 10% inductance modulation (|Φ_RF| = 0.01 Φ_0)
-        omega_c=3.4
-        * 2
-        * np.pi,  # gap: well in the S parameter from signal to tranmission
+        epsilon=0.04,
+        phi_dc_frac=1/3,  # Phi_dc/Phi0, matches julia/josephsoncircuits_comparison.jl's Phi_dc_frac
+        phi_rf_frac=0.01,
+        omega_c=3.4 * 2 * np.pi,  # gap: well in the S parameter from signal to tranmission
         v_ratio=-2.5,  # > 0 => co-propagating, < 0 => counter-propagating
         freq_min=1,  # GHz
         freq_max=12,  # GHz
@@ -81,8 +81,24 @@ def julia_comparison(dashboard):
             labels=dashboard_labels,
             ks_state=cfg.ks_state,
         ).run()
+    else:
+        _, ax = plt.subplots()
+
+        signal_left_index = ks_state.index(0)
+        signal_right_index = len(ks_state) + signal_left_index
+
+        S21 = S_params[:, signal_right_index, signal_left_index]  # port1 -> port2, direct
+        S12 = S_params[:, signal_left_index+1, signal_left_index]  # port2 -> port1, direct
+
+        ax.plot(cfg.freqs, 20 * np.log10(np.abs(S21)), label="S21")
+        ax.plot(cfg.freqs, 20 * np.log10(np.abs(S12)), label="S12")
+        ax.set_xlabel("Signal Frequency (GHz)")
+        ax.set_ylabel("|S| (dB)")
+        ax.legend()
+        plt.show()
+
 
 
 if __name__ == "__main__":
     setup_logging()
-    julia_comparison(dashboard=True)
+    julia_comparison(dashboard=False)
