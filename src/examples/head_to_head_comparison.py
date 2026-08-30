@@ -12,10 +12,10 @@ matplotlib.use("Agg")
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
+from utils import COLOR_JULIA, COLOR_PYTHON, PAPER_STYLE
 
 from logger import get_logger, setup_logging
 from simulation import Simulation
-from utils import COLOR_JULIA, COLOR_PYTHON, PAPER_STYLE
 
 log = get_logger(__name__)
 

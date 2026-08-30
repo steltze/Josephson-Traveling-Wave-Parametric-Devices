@@ -4,16 +4,16 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import matplotlib as mpl
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 
-from simulation import SimulationConfig, Simulation
-from models.jtl_discrete_multipump import JTLDiscreteMultiPump
-from models.electrical_elements import multipump_frequency_grid
 from analysis.checks import check_photon_flux_conservation
-from examples.utils import COLOR_JULIA, COLOR_PYTHON, PAPER_STYLE
 from dashboard import Dashboard
+from examples.utils import COLOR_JULIA, COLOR_PYTHON, PAPER_STYLE
 from logger import get_logger, setup_logging
+from models.electrical_elements import multipump_frequency_grid
+from models.jtl_discrete_multipump import JTLDiscreteMultiPump
+from simulation import Simulation, SimulationConfig
 
 log = get_logger(__name__)
 
@@ -125,7 +125,7 @@ def two_pump_jtl(cell_topology: str = "pi", backend=None, dashboard=False):
         # )
         ax.set_ylabel(r"$|S|^2$ (dB)")
         ax.set_title(
-            f"Two-pump JTL",
+            "Two-pump JTL",
             loc="left",
         )
         ax.set_xlabel("Signal frequency (GHz)")

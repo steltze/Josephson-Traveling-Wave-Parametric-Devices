@@ -5,18 +5,18 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 sys.path.insert(0, os.path.dirname(__file__))
 
 import matplotlib as mpl
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
+from utils import COLOR_PYTHON, PAPER_STYLE
 
-from logger import get_logger, setup_logging
-from simulation import SimulationConfig, Simulation
-from models import JTLDiscrete
 from analysis.checks import (
-    check_transfer_matrix_determinant,
     check_photon_flux_conservation,
+    check_transfer_matrix_determinant,
 )
 from dashboard import Dashboard
-from utils import COLOR_PYTHON, PAPER_STYLE
+from logger import get_logger, setup_logging
+from models import JTLDiscrete
+from simulation import Simulation, SimulationConfig
 
 log = get_logger(__name__)
 
@@ -25,7 +25,7 @@ FIGURES_DIR = os.path.join(REPO_ROOT, "figures")
 
 
 def julia_comparison(dashboard):
-    ks_state = [0, 1]
+    ks_state = [-1, 0, 1]
     M = 1
     ncell = 320
     cfg = SimulationConfig(
@@ -35,13 +35,13 @@ def julia_comparison(dashboard):
         ncell=ncell,
         cell_size=10e-6,
         omega_cutoff=2 * 50 / 530e-3,  # L = 530 pH, C = 212 fF -> ~30 GHz
-        omega_pump=6.8 * 2 * np.pi,
+        omega_pump=13.1 * 2 * np.pi,
         omega_j=60 * 2 * np.pi,  # usually smaller
         epsilon=0.04,
         phi_dc_frac=1/3,  # Phi_dc/Phi0, matches julia/josephsoncircuits_comparison.jl's Phi_dc_frac
-        phi_rf_frac=0.01,
+        phi_rf_frac=0.02,
         omega_c=3.4 * 2 * np.pi,  # gap: well in the S parameter from signal to tranmission
-        v_ratio=-2.5,  # > 0 => co-propagating, < 0 => counter-propagating
+        v_ratio=-6.0,  # > 0 => co-propagating, < 0 => counter-propagating
         freq_min=1,  # GHz
         freq_max=12,  # GHz
         n_freqs=500,

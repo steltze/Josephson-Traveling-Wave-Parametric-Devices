@@ -1,17 +1,16 @@
 import os
 import sys
-from dataclasses import replace
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import matplotlib as mpl
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 
+from examples.utils import COLOR_PYTHON, PAPER_STYLE
 from logger import get_logger, setup_logging
-from simulation import SimulationConfig, Simulation
 from models import JTLDiscrete
-from examples.utils import COLOR_PYTHON, PAPER_STYLE, save_all
+from simulation import Simulation, SimulationConfig
 
 log = get_logger(__name__)
 

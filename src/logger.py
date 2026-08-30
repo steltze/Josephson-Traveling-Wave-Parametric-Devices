@@ -6,7 +6,7 @@ TEST = 25
 logging.addLevelName(TEST, "TEST")
 logging.Logger.test = lambda self, msg, *args, **kw: self.log(TEST, msg, *args, **kw)
 
-__all__ = ["logging", "TEST", "get_logger", "setup_logging", "timer"]
+__all__ = ["TEST", "get_logger", "logging", "setup_logging", "timer"]
 
 
 class _ColorFormatter(logging.Formatter):

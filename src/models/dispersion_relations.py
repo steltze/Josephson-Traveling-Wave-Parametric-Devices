@@ -5,6 +5,7 @@ Dispersion relations
 
 import numpy as np
 
+
 def dispersion_linear(
     omegas: np.ndarray, omega_cutoff: float
 ) -> np.ndarray:

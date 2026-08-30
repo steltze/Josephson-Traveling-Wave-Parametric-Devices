@@ -1,12 +1,12 @@
 import numpy as np
 import pytest
 
-from src.numerical_solver.tranfer_matrix import (
+from models.cell import CellImmitance
+from numerical_solver.tranfer_matrix import (
     single_mode_matrix,
     single_mode_matrix_grid,
     symmetric_single_mode_matrix,
 )
-from src.models.cell import CellImmitance
 
 
 def _random_zy(rng, Nf, m):

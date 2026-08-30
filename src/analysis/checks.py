@@ -17,8 +17,8 @@ from __future__ import annotations
 
 import itertools
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 
 from backends import Backend
 from logger import get_logger

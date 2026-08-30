@@ -1,9 +1,8 @@
 import numpy as np
 import pytest
 
-from src.numerical_solver.abcd_matrix import ABCDMatrix
-from src.numerical_solver.s_matrix import SMatrix, ABCD_to_S
-from src.symbolic_solver.cell_single_mode import CellSingleMode
+from numerical_solver.abcd_matrix import ABCDMatrix
+from numerical_solver.s_matrix import ABCD_to_S, SMatrix
 
 
 def _random_data(rng, Nf, N):

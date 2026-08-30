@@ -4,16 +4,14 @@ from dataclasses import replace
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 
-from logger import get_logger, setup_logging
-from simulation import SimulationConfig, Simulation
-from models import JTLDiscrete
 from analysis.checks import check_transfer_matrix_determinant
 from analysis.dispersion_relation import bloch_wavenumbers
-from examples.utils import save_all
-from symbolic_solver.cell_single_mode_symmetric import CellSingleModeSymmetric
+from logger import get_logger, setup_logging
+from models import JTLDiscrete
+from simulation import Simulation, SimulationConfig
 
 log = get_logger(__name__)
 
@@ -61,10 +59,6 @@ def compare_cell_topologies():
         T_grid = sim.get_transfer_matrix_grid()  # (Nf, Nc, dim, dim)
         check_transfer_matrix_determinant(T_grid, tolerance=1e-8)
         sims[topology] = sim
-
-    # symbolic_matrix, state_syms = sim.get_symbolic_matrix()
-    # a = CellSingleModeSymmetric()
-    # a.export_matrix_graphic(symbolic_matrix, state_syms)
 
     fig, (ax_gain, ax_idler, ax_err) = plt.subplots(1, 3, figsize=(17, 5))
     s_params = {}

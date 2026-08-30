@@ -72,7 +72,7 @@ class ABCDMatrix:
     def D(self) -> np.ndarray:
         return self._data[:, self.half_matrix :, self.half_matrix :]
 
-    def __matmul__(self, other: "ABCDMatrix") -> "ABCDMatrix":
+    def __matmul__(self, other: ABCDMatrix) -> ABCDMatrix:
         """Cascade self (left/input) with other (right/output): T = self @ other."""
         if not isinstance(other, ABCDMatrix):
             return NotImplemented
@@ -80,14 +80,14 @@ class ABCDMatrix:
             raise ValueError(f"Port-count mismatch: {self.N} vs {other.N}")
         return ABCDMatrix(self._data @ other._data)
 
-    def __getitem__(self, idx) -> "ABCDMatrix":
+    def __getitem__(self, idx) -> ABCDMatrix:
         """Index along the frequency axis, returning a new ABCDMatrix."""
         sliced = self._data[idx]
         if sliced.ndim == 2:
             sliced = sliced[None]
         return ABCDMatrix(sliced)
 
-    def to_S(self, Z0: float = 50.0, backend: Backend | str | None = None) -> "SMatrix":
+    def to_S(self, Z0: float = 50.0, backend: Backend | str | None = None) -> SMatrix:
         """
         Convert to an SMatrix.
 

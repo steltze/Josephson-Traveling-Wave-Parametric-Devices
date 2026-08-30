@@ -1,19 +1,14 @@
 from __future__ import annotations
 
-from functools import reduce
-from typing import Sequence, Tuple
-
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 
-from backends import Backend
-from symbolic_solver.cell_single_mode import CellSingleMode
-from symbolic_solver.cell_single_mode_symmetric import CellSingleModeSymmetric
-from numerical_solver.s_matrix import SMatrix, ABCD_to_S, cascade_all, terminate_ports
-from models.electrical_elements import multipump_frequency_grid
 from analysis.dispersion_relation import bloch_wavenumbers
-from analysis.s_parameters import plot_s_parameters as _plot_s_params
-from logger import get_logger, timer as _timer
+from backends import Backend
+from logger import get_logger
+from logger import timer as _timer
+from models.electrical_elements import multipump_frequency_grid
+from numerical_solver.s_matrix import ABCD_to_S, SMatrix, cascade_all, terminate_ports
 from numerical_solver.tranfer_matrix import single_mode_matrix_grid
 
 log = get_logger(__name__)
@@ -35,8 +30,8 @@ class Simulation:
         or the $TWPA_BACKEND environment variable if set.
     cell_topology : "L" or "pi"
         Unit-cell transfer-matrix topology. "L" (default) is the plain
-        series-then-shunt cell (`CellSingleMode`). "pi" is the symmetric
-        Pi (shunt/2-series-shunt/2) cell (`CellSingleModeSymmetric`).
+        series-then-shunt cell. "pi" is the symmetric Pi
+        (shunt/2-series-shunt/2) cell.
 
     Examples
     --------
@@ -51,7 +46,7 @@ class Simulation:
     >>> sim = Simulation(JTL, cfg, cell_topology="pi")  # symmetric Pi cell
     """
 
-    _CELL_MODELS = {"L": CellSingleMode, "pi": CellSingleModeSymmetric}
+    _CELL_TOPOLOGIES = ("L", "pi")
 
     def __init__(
         self,
@@ -63,14 +58,11 @@ class Simulation:
         self._cell_cls = cell_cls
         self._cfg = config
         self._backend = backend
-        try:
-            model_cls = self._CELL_MODELS[cell_topology]
-        except KeyError:
+        if cell_topology not in self._CELL_TOPOLOGIES:
             raise ValueError(
                 f"Unknown cell_topology {cell_topology!r}; "
-                f"expected one of {sorted(self._CELL_MODELS)}"
-            ) from None
-        self._model = model_cls()
+                f"expected one of {sorted(self._CELL_TOPOLOGIES)}"
+            )
         self._cell_topology = cell_topology
 
         self._T_grid = None

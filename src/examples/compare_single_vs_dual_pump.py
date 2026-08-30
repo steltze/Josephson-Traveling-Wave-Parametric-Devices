@@ -3,18 +3,17 @@ import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 
-from simulation import SimulationConfig, Simulation
-from models import JTLDiscrete
-from models.jtl_discrete_multipump import JTLDiscreteMultiPump
-from models.electrical_elements import multipump_frequency_grid
 from analysis.checks import check_photon_flux_conservation
-from examples.utils import save_all
 from dashboard import Dashboard
 from dashboard.dashboard import port_labels_from_ks_state, port_labels_from_multipump
 from logger import get_logger, setup_logging
+from models import JTLDiscrete
+from models.electrical_elements import multipump_frequency_grid
+from models.jtl_discrete_multipump import JTLDiscreteMultiPump
+from simulation import Simulation, SimulationConfig
 
 log = get_logger(__name__)
 

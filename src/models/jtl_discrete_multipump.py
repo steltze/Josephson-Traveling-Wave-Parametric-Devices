@@ -4,13 +4,12 @@ import numpy as np
 
 from models.cell import CellImmitance
 from models.electrical_elements import (
+    Capacitor,
     Component,
     ModulatedInductorMultiPump,
-    Capacitor,
     multipump_frequency_grid,
     n_sidebands_from_Kmax,
 )
-from models.dispersion_relations import dispersion_bloch
 
 
 class JTLDiscreteMultiPump:

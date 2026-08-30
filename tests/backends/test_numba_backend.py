@@ -5,7 +5,7 @@ from backends.numpy_backend import NumpyBackend
 
 numba = pytest.importorskip("numba")
 
-from backends.numba_backend import NumbaBackend  # noqa: E402
+from backends.numba_backend import NumbaBackend
 
 
 def _random_abcd(rng, N):

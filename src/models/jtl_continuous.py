@@ -7,15 +7,12 @@ from __future__ import annotations
 import numpy as np
 from scipy.optimize import brentq
 
-from numerical_solver.s_matrix import SMatrix
 from analysis.s_parameters import plot_s_parameters as _plot_s_params
+from logger import get_logger
 from models.dispersion_relations import (
-    dispersion_linear,
-    dispersion_linear_with_plasma,
-    dispersion_bloch,
     dispersion_bloch_with_plasma,
 )
-from logger import get_logger
+from numerical_solver.s_matrix import SMatrix
 
 log = get_logger(__name__)
 

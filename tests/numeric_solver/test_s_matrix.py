@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from src.numerical_solver.s_matrix import SMatrix, redheffer_star, ABCD_to_S
+from numerical_solver.s_matrix import ABCD_to_S, SMatrix, redheffer_star
 
 
 def _make_identity_S(Nf, N):

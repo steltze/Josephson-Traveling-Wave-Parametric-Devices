@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Sequence, Tuple
+from collections.abc import Sequence
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -9,7 +9,7 @@ import numpy as np
 def plot_s_parameters(
     S_matrix: np.ndarray,
     freqs: np.ndarray,
-    params: Sequence[Tuple[int, int]],
+    params: Sequence[tuple[int, int]],
     ax: plt.Axes | None = None,
     freq_scale: float = 1,
     freq_label: str = "Frequency (GHz)",

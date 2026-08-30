@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 from functools import reduce
+
 import numpy as np
 
 
@@ -99,11 +101,11 @@ class Component:
         return Y if _is_matrix(Y) else _diag_promote(Y)
 
     @staticmethod
-    def series(*components: "Component") -> "Component":
+    def series(*components: Component) -> Component:
         return _Combination(components, "series")
 
     @staticmethod
-    def parallel(*components: "Component") -> "Component":
+    def parallel(*components: Component) -> Component:
         return _Combination(components, "parallel")
 
 

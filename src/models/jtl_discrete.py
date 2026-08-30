@@ -3,8 +3,7 @@ from __future__ import annotations
 import numpy as np
 
 from models.cell import CellImmitance
-from models.electrical_elements import Component, ModulatedInductor, Capacitor, Inductor
-from models.dispersion_relations import dispersion_bloch
+from models.electrical_elements import Capacitor, Component, ModulatedInductor
 
 
 class JTLDiscrete:
@@ -75,9 +74,9 @@ class JTLDiscrete:
         wj = 1.0 / np.sqrt(L * Cs_jj)
 
         w_p = config.omega_pump
-        # thetas = w_p / v_p * ns * a
+        thetas = w_p / v_p * ns * a
 
-        thetas = np.sign(config.v_ratio)*dispersion_bloch(w_p, config.omega_cutoff / config.v_ratio) * ns
+        # thetas = np.sign(config.v_ratio)*dispersion_bloch(w_p, config.omega_cutoff / config.v_ratio) * ns
 
 
         M = config.M
@@ -85,7 +84,7 @@ class JTLDiscrete:
         Nf = len(w_s)
         n = len(config.ks_state)
 
-        from scipy.special import jv   
+        from scipy.special import jv
         a = np.pi * config.phi_dc_frac
         b = np.pi * config.phi_rf_frac
         J = [jv(p, b) for p in range(M + 1)]

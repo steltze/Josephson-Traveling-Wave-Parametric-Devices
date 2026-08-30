@@ -3,8 +3,7 @@ from __future__ import annotations
 import numpy as np
 
 from models.cell import CellImmitance
-from models.electrical_elements import Component, ModulatedInductor, Capacitor, Inductor
-from models.dispersion_relations import dispersion_bloch
+from models.electrical_elements import Capacitor, Component, Inductor, ModulatedInductor
 
 
 class JTLDiscreteSlotMode:

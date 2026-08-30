@@ -3,17 +3,15 @@ import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 
-from logger import get_logger, setup_logging
-from simulation import SimulationConfig, Simulation
-from models import JTLDiscrete
 from analysis.checks import (
     check_transfer_matrix_determinant,
-    check_photon_flux_conservation,
 )
-from examples.utils import save_all
+from logger import get_logger
+from models import JTLDiscrete
+from simulation import Simulation, SimulationConfig
 
 log = get_logger(__name__)
 
@@ -84,10 +82,6 @@ def harmonics_comparison():
 
     print(np.abs(db[1] - db[0]).sum())
     print(np.abs(energy_checks[1] - energy_checks[0]).sum())
-
-    # symbolic_matrix, _ = sim.get_symbolic_matrix()
-    # a = CellSingleMode()
-    # a.export_matrix_graphic(symbolic_matrix)
 
     # save_all("harmonics_comparison")
     plt.show()
