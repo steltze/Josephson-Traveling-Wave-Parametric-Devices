@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 import numpy as np
+from scipy.special import jv
 from logger import get_logger
 
 log = get_logger(__name__)
@@ -122,8 +123,8 @@ class SimulationConfig:
 
     # Pump (float = single tone; list[float] length P = multi-pump)
     epsilon: float | list[float] = 0.0
-    phi_rf_frac: float = 0.0
-    phi_dc_frac: float = 0.25
+    phi_rf_frac: float = 0.05
+    phi_dc_frac: float = 1/3
     omega_c: float = 5 * 2 * np.pi
     v_ratio: float | list[float] = 3.0
     omega_pump: float | list[float] | None = None  # None → v_ratio * omega_c
@@ -248,10 +249,12 @@ class SimulationConfig:
             if not self.adiabatic_pump:
                 return v_nominal
 
-            db = -0.1
+            db = -1
             gain = np.arccosh(10 ** (-db / 20))
             vs = self.v_signal
-
+            b = np.pi * self.phi_rf_frac
+            self.epsilon = 2 * np.tan(np.pi * self.phi_dc_frac) * jv(1, b) / jv(0, b)
+            print(self.epsilon)
             def vp_of(omega_s: np.ndarray) -> np.ndarray:
                 return -vs / (2 * omega_s / self.omega_pump + 1)
 
@@ -262,8 +265,8 @@ class SimulationConfig:
                     * (omega_s**2 / vs**2 + self.omega_pump * omega_s / vp / vs)
                 )
 
-            step_frac = 0.02
-            f_lo, f_hi = 3.5, 4.5  # GHz
+            step_frac = 0.01
+            f_lo, f_hi = 3.5, 5.0  # GHz
             omega_hi = f_hi * 2 * np.pi
             omega_targets = [f_lo * 2 * np.pi]
             while omega_targets[-1] < omega_hi:

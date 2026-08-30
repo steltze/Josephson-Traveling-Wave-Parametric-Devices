@@ -20,11 +20,6 @@ from logger import get_logger
 log = get_logger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# JTLContinuous class
-# ---------------------------------------------------------------------------
-
-
 class JTLContinuous:
     """
     Continuous coupled-mode backward-wave TWPA/TWPC model.
@@ -104,10 +99,6 @@ class JTLContinuous:
         _Variant.__name__ = f"JTLContinuous[{fn.__name__}]"
         return _Variant
 
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
-
     def _k(self, omegas: np.ndarray) -> np.ndarray:
         return self.dispersion_fn(omegas, self._cfg.omega_cutoff, self._cfg.omega_j)
 
@@ -125,10 +116,6 @@ class JTLContinuous:
             (self._k(np.float64(omega + eps)) - self._k(np.float64(omega - eps)))
             / (2.0 * eps)
         )
-
-    # ------------------------------------------------------------------
-    # Analytical quantities
-    # ------------------------------------------------------------------
 
     def phase_mismatch(self, omegas: np.ndarray | None = None) -> np.ndarray:
         """Δk = ks + kI - kp in rad/cell. Zero at the gap centre."""

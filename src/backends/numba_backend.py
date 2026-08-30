@@ -164,10 +164,6 @@ def _abcd_to_s_single(abcd: np.ndarray, z0: np.ndarray) -> np.ndarray:
     Cinv = np.ascontiguousarray(Cinv_CinvD[:, :k])
     CinvD = np.ascontiguousarray(Cinv_CinvD[:, k:])
 
-    # M = Z - diag(conj(z0)), applied as an in-place diagonal update instead
-    # of allocating dense (N,N) diag(z0)/diag(conj(z0)) matrices just to
-    # hold N diagonal values -- this kernel runs once per frequency across
-    # `numba.prange` threads, so the saved allocations multiply by Nf.
     M = np.empty((N, N), dtype=np.complex128)
     M[:k, :k] = A @ Cinv
     M[:k, k:] = (
@@ -272,14 +268,6 @@ class NumbaBackend(Backend):
     `numba.prange`. First call per input shape/dtype pays a JIT
     compilation cost.
 
-    Measured behaviour (see `cascade_all`'s docstring for the benchmark
-    setup): this backend wins over NumpyBackend as the port count N grows
-    (more Floquet sidebands — larger M / longer ks_state), and loses for
-    small N (e.g. N=4, the common single-idler case) even after fusing
-    the whole cell cascade into one call. For small N the bottleneck is
-    not Python dispatch but the fixed per-call cost of solving many tiny
-    linear systems — fusing removes the former but not the latter.
-
     Requires the optional `numba` dependency: `pip install .[numba]`.
     """
 
@@ -359,14 +347,5 @@ class NumbaBackend(Backend):
         Fused cascade: the whole per-cell reduction compiles to one kernel
         (single dispatch for all Nc cells, vs Nc calls into `redheffer_star`
         from Python for the default `Backend.cascade_all`).
-
-        Measured on a 321-cell, 500-frequency-point cascade: this closes
-        essentially none of the gap at N=4 (fused: still ~2x slower than
-        NumPy) — the cost there is dominated by the per-call overhead of
-        `np.linalg.solve` on many tiny (k=2) systems, not by Python
-        dispatch, so fusing the outer loop doesn't touch it. It matters
-        more as N grows: ~1.6x faster than NumPy at N=12, ~2.4x at N=16,
-        where each per-frequency solve is large enough for that per-call
-        overhead to stop dominating.
         """
         return _cascade_all_batch(np.ascontiguousarray(s_cells))

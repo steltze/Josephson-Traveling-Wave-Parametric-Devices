@@ -65,8 +65,7 @@ def terminate_ports(S: np.ndarray, terminated_idx, gamma: complex) -> np.ndarray
 
     Physically: the eliminated ports are each independently closed off by
     their own reflective load (not connected to each other), e.g. the two
-    physical ends of an internal/bound mode with no external port -- see
-    `Simulation.get_s_matrix_slot_terminated`. Standard port-loading
+    physical ends of an internal/bound mode with no external port. Standard port-loading
     reduction: partitioning ports into kept (A) and terminated (B),
 
         S_reduced = S_AA + gamma * S_AB @ (I - gamma*S_BB)^-1 @ S_BA
@@ -123,13 +122,12 @@ def ABCD_to_S(ABCD: np.ndarray, Z0, backend: Backend | str | None = None) -> np.
         ABCD = ABCD[None]
     Nf, N, _ = ABCD.shape
 
-    # --- per-port reference impedance ---
     Z0 = np.asarray(Z0, dtype=complex)
-    if Z0.ndim == 0:  # scalar -> broadcast to all ports
+    if Z0.ndim == 0:
         Z0vec = np.full((Nf, N), Z0)
-    elif Z0.ndim == 1:  # (N,) -> same across frequency
+    elif Z0.ndim == 1:
         Z0vec = np.broadcast_to(Z0, (Nf, N))
-    else:  # (Nf, N)
+    else:
         Z0vec = Z0
 
     S = _resolve_backend(backend).abcd_to_s(ABCD, Z0vec)
@@ -233,11 +231,7 @@ class SMatrix:
         """
         Re-normalize to quasi-photon-flux basis for a Bloch-mode S-matrix.
 
-        Applies  S_ph = D⁻¹ @ S @ D  so that Σᵢ |S_ph[i,j]|² = 1.
-
-        For an ABCD→S matrix normalised to uniform Z0, the correct weight is
-        the Bloch wavenumber k, not the frequency ω.  Pass port_ks to use
-        k-weights; without it falls back to ω-weights (free-space convention).
+        Applies  S_ph = D⁻¹ @ S @ D.
 
         Parameters
         ----------

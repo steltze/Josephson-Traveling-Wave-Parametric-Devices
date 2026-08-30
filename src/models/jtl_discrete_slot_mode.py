@@ -107,7 +107,6 @@ class JTLDiscreteSlotMode:
             Zs_harm_arr = np.zeros((Nf, n, n), dtype=complex)
             Zs_slot_arr = np.zeros((Nf, n, n), dtype=complex)
             if not first:
-                # Exact parallel-LC series impedance: JJ inductor || self-capacitance
                 Ccap_val = 1.0 / (_wj**2 * _L)
                 squid = Component.parallel(
                     ModulatedInductor(L0=_L, eps=_eps, order=M, theta=_th),
@@ -118,8 +117,6 @@ class JTLDiscreteSlotMode:
                 Zs_slot = Inductor(L_slot_mode[i])
                 Zs_slot_arr = Zs_slot.impedance_matrix(omega_sb)
 
-            # Shunt-to-ground capacitor: unmodulated, so it doesn't couple
-            # sidebands -- its harmonic matrix is diagonal.
             Yg = Capacitor(_C)
             Yg_harm_arr = Yg.admittance_matrix(omega_sb)  # (Nf, n, n)
 

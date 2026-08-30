@@ -62,11 +62,11 @@ def _get_port_frequencies(
 
         half = np.stack(
             [multipump_frequency_grid(ws, omega_pump, ks_state)[0] for ws in omegas]
-        )  # (Nf, D) signed
+        )
     else:
         ks = np.asarray(ks_state)
-        half = omegas[:, None] + ks[None, :] * omega_pump  # (Nf, n_modes) signed
-    return np.concatenate([half, half], axis=1)  # (Nf, N)
+        half = omegas[:, None] + ks[None, :] * omega_pump
+    return np.concatenate([half, half], axis=1)
 
 
 def check_photon_flux_conservation(
@@ -76,31 +76,27 @@ def check_photon_flux_conservation(
     ks_state,
 ) -> np.ndarray:
     """
-    eta-weighted power sum for a photon-flux-normalized S-matrix.
+    Power sum for a photon-flux-normalized S-matrix.
 
     ``S_ph`` must come from photon-flux normalization (e.g.
     ``Simulation.get_s_matrix(normalize=True)`` or
     ``SMatrix.normalize_photon_flux``). A port's signed frequency
     ωₖ = ω + k·ω_pump can be negative (an idler / down-converted sideband,
-    common whenever ks_state contains a negative k) — such ports are
+    common whenever ks_state contains a negative k). Such ports are
     pseudo-unitary partners of the positive-frequency ports, not ordinary
-    channels. A *plain* Σᵢ|S_ph[i,j]|² is not conserved for them and can
-    look wildly "overestimated" wherever that port carries real parametric
-    gain. The conserved quantity (Manley-Rowe photon number, exact for a
-    lossless-junction line even with gain) is instead:
+    channels. The conserved quantity (Manley-Rowe photon number, exact for a
+    lossless-junction line even with gain) is:
 
         Σᵢ ηᵢ |S_ph[i,j]|²  =  ηⱼ,      ηₖ = sign(ωₖ)
 
     Works for both single-pump (`omega_pump` a scalar, `ks_state` a flat
     list of sideband indices) and multi-pump (`omega_pump` a list of P
-    pump frequencies, `ks_state` actually `Kmax` -- per-pump (k_min, k_max)
-    ranges, tracked state the tensor lattice D = prod(n_j)) -- see
-    `_get_port_frequencies`. ηₖ is still just sign of the (now multi-pump)
-    signed port frequency, so the identity is unchanged.
+    pump frequencies, `ks_state` actually `Kmax` - per-pump (k_min, k_max)
+    ranges.
 
     Returns
     -------
-    check : (Nf, N) — should equal ηⱼ (±1) for every input port j; deviation
+    check : (Nf, N) — should equal ηⱼ (±1) for every input port j. Deviation
         indicates real dissipation or a port-labeling/normalization bug.
     """
     w = _get_port_frequencies(omegas, omega_pump, ks_state)  # (Nf, N) signed
@@ -174,98 +170,6 @@ def check_reflection_vs_transmission(
             f"(max |R+T-eta| = {residual.max():.3e})."
         )
     return R, T
-
-
-def plot_reflection_vs_transmission(
-    freqs: np.ndarray,
-    R: np.ndarray,
-    T: np.ndarray,
-    ax: plt.Axes | None = None,
-    label: str | None = None,
-) -> plt.Axes:
-    """
-    Plot reflected/transmitted power fraction vs frequency from
-    `check_reflection_vs_transmission`'s output.
-
-    Reflection is drawn solid, transmission dashed, sharing a color per
-    call so multiple sweeps (e.g. one per epsilon) overlay cleanly.
-    """
-    if ax is None:
-        _, ax = plt.subplots(figsize=(8, 5))
-    (line,) = ax.plot(freqs, R, "-", label=f"R{f' ({label})' if label else ''}")
-    ax.plot(
-        freqs,
-        T,
-        "--",
-        color=line.get_color(),
-        label=f"T{f' ({label})' if label else ''}",
-    )
-    ax.set_xlabel("Frequency (GHz)")
-    ax.set_ylabel("Power fraction")
-    ax.set_ylim(-0.05, 1.05)
-    ax.grid(True, alpha=0.3)
-    ax.legend(fontsize=8)
-    return ax
-
-
-def get_power_flow(
-    S_ph: np.ndarray,
-    omegas: np.ndarray,
-    omega_pump,
-    ks_state,
-    input_port: int,
-) -> np.ndarray:
-    """
-    Unbundled eta-weighted power delivered to every output port from
-    `input_port` -- one value per port, not pre-summed by side.
-
-    `check_reflection_vs_transmission` bundles same-mode and
-    mode-converted contributions together by port side alone, which can
-    hide *which* physical process is responsible for a change: "signal
-    reflected as signal" and "signal converted to idler and sent back out
-    the input side" both land in its R bucket even though one is plain
-    reflection and the other is parametric mode conversion. This returns
-    the per-port values unbundled so the two can be told apart (e.g. by
-    port side *and* by which ks_state sideband each port carries).
-
-    Returns
-    -------
-    power : ndarray, shape (Nf, N) -- eta_i * |S_ph[i, input_port]|^2 for
-        every output port i. Sums (over i) to eta[input_port] exactly
-        (the same identity `check_photon_flux_conservation` checks).
-    """
-    w = _get_port_frequencies(omegas, omega_pump, ks_state)  # (Nf, N)
-    eta = np.sign(w)
-    return (np.abs(S_ph[:, :, input_port]) ** 2) * eta
-
-
-def plot_power_flow(
-    freqs: np.ndarray,
-    power: np.ndarray,
-    ks_state: list[int],
-    input_port: int,
-    ax: plt.Axes | None = None,
-) -> plt.Axes:
-    """
-    Plot the per-port breakdown from `get_power_flow`, one curve per
-    output port, labeled by side (reflected/transmitted) and sideband so
-    mode conversion is visually distinguishable from plain reflection.
-    """
-    n_modes = len(ks_state)
-    in_k = ks_state[input_port % n_modes]
-    if ax is None:
-        _, ax = plt.subplots(figsize=(8, 5))
-    for i in range(power.shape[1]):
-        side = "reflected" if i < n_modes else "transmitted"
-        k = ks_state[i % n_modes]
-        mode = "same mode" if k == in_k else "converted"
-        ax.plot(freqs, power[:, i], label=f"{side}, k={k} ({mode})")
-    ax.set_xlabel("Frequency (GHz)")
-    ax.set_ylabel(r"$\eta_i\,|S_{i,\mathrm{in}}|^2$")
-    ax.set_ylim(-0.05, 1.05)
-    ax.grid(True, alpha=0.3)
-    ax.legend(fontsize=8)
-    return ax
 
 
 def check_transfer_matrix_determinant(

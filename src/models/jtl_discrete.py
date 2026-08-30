@@ -75,28 +75,28 @@ class JTLDiscrete:
         wj = 1.0 / np.sqrt(L * Cs_jj)
 
         w_p = config.omega_pump
-        # thetas = w_p / v_p * ns * a
+        thetas = w_p / v_p * ns * a
 
-        thetas = np.sign(config.v_ratio)*dispersion_bloch(w_p, config.omega_cutoff / config.v_ratio) * ns
+        # thetas = np.sign(config.v_ratio)*dispersion_bloch(w_p, config.omega_cutoff / config.v_ratio) * ns
 
 
         M = config.M
-        w_s = np.asarray(config.omegas)  # (Nf,)
+        w_s = np.asarray(config.omegas) 
         Nf = len(w_s)
         n = len(config.ks_state)
 
-        from scipy.special import jv   # Bessel function of the first kind J_n
+        from scipy.special import jv   
         a = np.pi * config.phi_dc_frac
         b = np.pi * config.phi_rf_frac
         J = [jv(p, b) for p in range(M + 1)]
 
         prefactor = 2.0 / L[0]
         c = {}
-        c[0] = prefactor * np.cos(a) * J[0]                      # identity (DC) coefficient
+        c[0] = prefactor * np.cos(a) * J[0]                    
         for m in range(1, M+1):
-            if m % 2 == 0:   # even
+            if m % 2 == 0:   
                 c[m] = prefactor * np.cos(a) * 2*(-1)**(m//2) * J[m]
-            else:            # odd
+            else:            
                 c[m] = -prefactor * np.sin(a) * 2*(-1)**((m-1)//2) * J[m]
 
         cells = []

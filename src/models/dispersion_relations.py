@@ -1,7 +1,8 @@
 
-# ---------------------------------------------------------------------------
-# Dispersion relations — uniform signature (omegas, omega_cutoff, omega_j)
-# ---------------------------------------------------------------------------
+"""
+Dispersion relations
+"""
+
 import numpy as np
 
 def dispersion_linear(

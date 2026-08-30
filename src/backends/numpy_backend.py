@@ -13,9 +13,7 @@ class NumpyBackend(Backend):
     def single_mode_matrix(self, Zs: np.ndarray, Yg: np.ndarray) -> np.ndarray:
         Nf, m, _ = Zs.shape
         I = np.eye(m, dtype=complex)
-        # Write blocks directly into the output instead of concatenate-ing
-        # halves together -- avoids allocating `top`/`bottom` plus a third
-        # full-size copy for the final join.
+
         T = np.empty((Nf, 2 * m, 2 * m), dtype=complex)
         T[:, :m, :m] = I
         T[:, :m, m:] = -Zs
@@ -26,7 +24,7 @@ class NumpyBackend(Backend):
     def symmetric_single_mode_matrix(
         self, Zs: np.ndarray, Yg: np.ndarray
     ) -> np.ndarray:
-        # Symmetric pi-cell: shunt Yg/2 - series Zs - shunt Yg/2
+
         Nf, m, _ = Zs.shape
         I = np.eye(m, dtype=complex)
         Yg_half = Yg / 2
@@ -75,22 +73,21 @@ class NumpyBackend(Backend):
         T = np.empty((Nf, 4 * m, 4 * m), dtype=complex)
         Zeros = np.zeros((m, m), dtype=complex)
 
-        # ---- row 1 : V'_n = V'_{n+1} - Zs_slot @ I_s_{n+1} ----
         T[:, 0 * m : 1 * m, 0 * m : 1 * m] = I
         T[:, 0 * m : 1 * m, 1 * m : 2 * m] = Zeros
         T[:, 0 * m : 1 * m, 2 * m : 3 * m] = -Zs_slot
         T[:, 0 * m : 1 * m, 3 * m : 4 * m] = Zeros
-        # ---- row 2 : V_n = V_{n+1} - Zs @ I_{n+1} ----
+
         T[:, 1 * m : 2 * m, 0 * m : 1 * m] = Zeros
         T[:, 1 * m : 2 * m, 1 * m : 2 * m] = I
         T[:, 1 * m : 2 * m, 2 * m : 3 * m] = Zeros
         T[:, 1 * m : 2 * m, 3 * m : 4 * m] = -Zs
-        # ---- row 3 : I_s update (KCL at the slot node) ----
+
         T[:, 2 * m : 3 * m, 0 * m : 1 * m] = -(Yg_slot + Yi_coupling)
         T[:, 2 * m : 3 * m, 1 * m : 2 * m] = Yi_coupling
         T[:, 2 * m : 3 * m, 2 * m : 3 * m] = I + (Yg_slot + Yi_coupling) @ Zs_slot
         T[:, 2 * m : 3 * m, 3 * m : 4 * m] = -Yi_coupling @ Zs
-        # ---- row 4 : I update (KCL at the main node) ----
+
         T[:, 3 * m : 4 * m, 0 * m : 1 * m] = Yi_coupling
         T[:, 3 * m : 4 * m, 1 * m : 2 * m] = -(Yg + Yi_coupling)
         T[:, 3 * m : 4 * m, 2 * m : 3 * m] = -Yi_coupling @ Zs_slot
@@ -111,34 +108,25 @@ class NumpyBackend(Backend):
         Cinv = Cinv_CinvD[:, :, :k]
         CinvD = Cinv_CinvD[:, :, k:]
 
-        # M = Z - diag(conj(Z0)), built directly rather than via a separate
-        # Z plus a dense (Nf,N,N) diag(conj(Z0)) matrix -- Z0 only ever
-        # touches N of the N^2 entries, so it's applied as an in-place
-        # diagonal update instead of materializing it.
         M = np.empty((Nf, N, N), dtype=complex)
         M[:, :k, :k] = A @ Cinv
         # A@Cinv@D != (A@D)@Cinv unless C,D commute, so this must go through
-        # Cinv first -- but that product is already sitting in M[:,:k,:k],
-        # so reuse it instead of recomputing A@Cinv a second time.
+        # Cinv first
         M[:, :k, k:] = M[:, :k, :k] @ D - B
         M[:, k:, :k] = Cinv
         M[:, k:, k:] = CinvD
         idx = np.arange(N)
         M[:, idx, idx] -= np.conj(z0)
 
-        # power-wave S = √G0 (Z - Z0*) (Z + Z0)^{-1} √G0^{-1}
         G0 = np.real(z0)
         sqrtG0 = 1 / np.sqrt(G0)
         inv_sqrtG0 = 1.0 / sqrtG0
 
-        # P = Z + diag(Z0) = M + diag(Z0 + conj(Z0)) = M + diag(2 Re(Z0))
         P = M.copy()
         P[:, idx, idx] += 2.0 * G0
 
-        # right-solve P^{-1}: S0 = M P^{-1}  ->  P^T S0^T = M^T
         S0 = np.linalg.solve(P.swapaxes(-1, -2), M.swapaxes(-1, -2)).swapaxes(-1, -2)
 
-        # apply the diagonal √G0 (·) √G0^{-1} as row/column scaling
         return sqrtG0[:, :, None] * S0 * inv_sqrtG0[:, None, :]
 
     def redheffer_star(self, s2: np.ndarray, s1: np.ndarray) -> np.ndarray:
@@ -155,11 +143,9 @@ class NumpyBackend(Backend):
         S2_21 = s2[:, k:, :k]
         S2_22 = s2[:, k:, k:]
 
-        # Solve (I - S2_11 @ S1_22) @ X = [S2_11 @ S1_21, S2_12]
         A1 = np.eye(k)[None] - S2_11 @ S1_22
         X1 = np.linalg.solve(A1, np.concatenate([S2_11 @ S1_21, S2_12], axis=-1))
 
-        # Solve (I - S1_22 @ S2_11) @ X = [S1_21, S1_22 @ S2_12]
         A2 = np.eye(k)[None] - S1_22 @ S2_11
         X2 = np.linalg.solve(A2, np.concatenate([S1_21, S1_22 @ S2_12], axis=-1))
 

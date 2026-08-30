@@ -29,11 +29,11 @@ def adiabatic_pump_calibration():
         omega_cutoff=2 * 50 / 540e-3,
         omega_pump=6.8 * 2 * np.pi,
         omega_j=60 * 2 * np.pi,
-        epsilon=0.05,
+        epsilon=0.07,
         omega_c=3.4 * 2 * np.pi,
         v_ratio=-2.5,  # < 0 => counter-propagating
         freq_min=1,
-        freq_max=12,
+        freq_max=8,
         n_freqs=500,
         disorder=False,
         epsilon_nramp=0,

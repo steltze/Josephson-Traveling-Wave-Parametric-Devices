@@ -2,7 +2,7 @@
 Interactive S-parameter viewer.
 
 This script is the Streamlit process launched by `dashboard.Dashboard.run`.
-It never runs a simulation itself — it only receives S-matrices (already
+It never runs a simulation itself. It only receives S-matrices (already
 computed by your own script) through a `--data <pickle path>` argument, and
 lets you pick which S_ij from which run to plot in dB, without re-running
 anything.
@@ -23,9 +23,6 @@ import numpy as np
 import plotly.graph_objects as go
 import streamlit as st
 
-# Fixed-order categorical palette (CVD-validated), assigned in this order
-# (never cycled/recycled by rank) so multi-series S-parameter plots stay
-# colorblind-safe.
 PALETTE = [
     "#2a78d6",  # blue
     "#eb6834",  # orange
@@ -126,8 +123,6 @@ with plot_col:
         if ylim is not None:
             fig.update_yaxes(range=list(ylim))
 
-        # Scroll-wheel zoom, drag-to-zoom-box, and a double-click reset are
-        # all built into the plotly modebar/canvas by default.
         st.plotly_chart(fig, width="stretch", config={"scrollZoom": True})
     else:
         st.info("Select at least one S-parameter to plot.")

@@ -114,8 +114,6 @@ class JTLDiscreteMultiPump:
         w_s = np.asarray(config.omegas)  # (Nf,)
         Nf = len(w_s)
 
-        # Full tensor-lattice sideband grid (Nf, D); shared across cells --
-        # only each cell's per-pump theta phase differs.
         omega_sb = np.stack([multipump_frequency_grid(ws, w_p, Kmax)[0] for ws in w_s])
         n = omega_sb.shape[1]
 
@@ -132,7 +130,6 @@ class JTLDiscreteMultiPump:
 
             Zs_harm_arr = np.zeros((Nf, n, n), dtype=complex)
             if not first:
-                # Exact parallel-LC series impedance: JJ inductor || self-capacitance
                 Ccap_val = 1.0 / (_wj**2 * _L)
                 squid = Component.parallel(
                     ModulatedInductorMultiPump(

@@ -11,15 +11,11 @@ class Backend(ABC):
 
     An implementation supplies the batched linear-algebra kernels the
     solver is built on: per-cell transfer-matrix construction, ABCD-to-S
-    conversion, and the Redheffer star product. `numerical_solver.tranfer_matrix`
-    and `numerical_solver.s_matrix` dispatch to whichever backend is
-    selected via `backends.get_backend`; every implementation must satisfy
-    this contract so they stay interchangeable.
+    conversion, and the Redheffer star product. Every implementation must satisfy
+    this functionality so they stay interchangeable.
 
     Methods receive arrays already coerced to complex dtype and batched to
-    (Nf, N, N) / (Nf, N) — that normalization happens once in the calling
-    module, not per backend, so an accelerator only has to implement the
-    numerical kernel itself.
+    (Nf, N, N) / (Nf, N).
     """
 
     name: str
@@ -97,27 +93,12 @@ class Backend(ABC):
             cells, e.g. from `JTLDiscreteSlotMode`), `Yg_slot_fn` /
             `Yi_slot_coupling_fn` must be set too, with the same shape.
         topology : "L" or "pi"
-            Ignored for slot-mode cells -- `slot_mode_matrix` doesn't have
-            an L/pi variant, so it's used as-is whenever cells carry slot
-            fields.
+            Ignored for slot-mode cells, only "L" topology supported for now.
 
         Returns
         -------
         ndarray, complex, shape (Nf, Ncells, 2m, 2m), or (Nf, Ncells, 4m, 4m)
         for slot-mode cells.
-
-        Default implementation: one Python-level dispatch per cell (Nc
-        calls total) into `single_mode_matrix` / `symmetric_single_mode_matrix`
-        / `slot_mode_matrix`, each of which handles the full frequency batch
-        at once. Measured faster than folding the cell axis into one
-        (Nf*Ncells, m, m) batched call: stacking cells into a single giant
-        batch trades Nc cheap Python dispatches (each already vectorized
-        over Nf) for one huge matmul with worse cache locality, which loses
-        in practice (~1.5-2x slower, measured at Nc=321). A backend whose
-        per-cell overhead is dominated by per-call dispatch rather than by
-        the work itself should override this to fuse the whole cell loop
-        into a single compiled kernel instead (see `Backend.cascade_all`'s
-        docstring for the analogous rationale).
         """
         Ncells = len(cells)
         Nf, m, _ = cells[0].Zs_harm_fn.shape
@@ -187,14 +168,6 @@ class Backend(ABC):
         Returns
         -------
         ndarray, complex, shape (Nf, N, N)
-
-        Default implementation: sequentially reduces via `redheffer_star`,
-        one call per cell (Nc calls total) — this is what
-        `Simulation.get_s_matrix` did directly before this method existed.
-        A backend whose `redheffer_star` overhead is dominated by per-call
-        dispatch rather than by the work itself (e.g. a JIT backend with
-        many small cells) should override this to fuse the whole
-        reduction into a single compiled kernel instead.
         """
         Nc = s_cells.shape[1]
         total = s_cells[:, 0]

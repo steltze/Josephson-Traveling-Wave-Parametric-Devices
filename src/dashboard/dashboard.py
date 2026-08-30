@@ -2,32 +2,7 @@
 Programmatic launcher for the S-parameter dashboard.
 
 Run your simulation(s) exactly as before, then hand the resulting
-S-matrices straight to `Dashboard` — nothing gets re-run inside the
-dashboard, it only lets you pick which S_ij (from which run) to plot,
-in dB, without re-cascading anything.
-
-Example
--------
->>> from simulation import SimulationConfig, Simulation
->>> from models import JTLDiscrete
->>> from dashboard import Dashboard
->>>
->>> cfg1 = SimulationConfig(epsilon=0.05)
->>> cfg2 = SimulationConfig(epsilon=0.10)
->>> S1 = Simulation(JTLDiscrete, cfg1).get_s_matrix()
->>> S2 = Simulation(JTLDiscrete, cfg2).get_s_matrix()
->>>
->>> Dashboard([S1, S2], freqs=[cfg1.freqs, cfg2.freqs], labels=["eps=0.05", "eps=0.10"]).run()
-
-If every run shares the same frequency grid, pass `freqs` once instead of
-a list — `Dashboard([S1, S2], freqs=cfg.freqs)`.
-
-Pass `ks_state` (the same list used to build `SimulationConfig`) to get
-ports labelled by physics ("left signal", "right idler (k=+1)") instead of
-raw port indices ("S13") — see `port_labels_from_ks_state`. For a
-multi-pump run (`models.jtl_discrete_multipump.JTLDiscreteMultiPump`), pass
-`omega_pump`/`Kmax` instead (the same values used to build
-`SimulationConfig`) — see `port_labels_from_multipump`.
+S-matrices straight to `Dashboard`.
 """
 
 from __future__ import annotations
@@ -51,20 +26,13 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 def _free_port(port: int) -> None:
     """
     Kill any leftover process already bound to `port`.
-
-    Streamlit only auto-picks a different port when none was requested;
-    since `run()` always passes `--server.port` explicitly, a stale
-    dashboard process still holding the port (e.g. the previous run wasn't
-    Ctrl+C'd) makes the next launch fail outright instead of reusing the
-    port. Only processes whose command line mentions "streamlit" are
-    killed, so an unrelated program on the same port is left alone.
     """
     try:
         result = subprocess.run(
             ["lsof", "-ti", f"tcp:{port}"], capture_output=True, text=True
         )
     except FileNotFoundError:
-        return  # lsof not available; best-effort only
+        return
     pids = result.stdout.split()
 
     for pid in pids:
@@ -102,11 +70,9 @@ def port_labels_from_ks_state(ks_state: list[int]) -> list[str]:
     """
     Physical port names for the standard single-pump port ordering: the
     state vector is `ks_state` on the left (input) side followed by the
-    same `ks_state` on the right (output/transmitted) side (see
-    `Simulation.get_s_matrix` / `julia_comparison.py`'s
-    `central_band`/`transmitted_band = central_band + len(ks_state)`).
+    same `ks_state` on the right (output/transmitted) side.
 
-    k=0 is the signal; k!=0 is an idler at that many pump harmonics away.
+    k=0 is the signal, k!=0 is an idler at that many pump harmonics away.
     """
     names = ["signal" if k == 0 else f"idler (k={k:+d})" for k in ks_state]
     return [f"{n} left" for n in names] + [f"{n} right" for n in names]
@@ -116,15 +82,14 @@ def port_labels_from_multipump(
     omega_pump: list[float], Kmax: list[tuple[int, int]]
 ) -> list[str]:
     """
-    Physical port names for a multi-pump lattice (see
-    `models.jtl_discrete_multipump.JTLDiscreteMultiPump`): the state vector
+    Physical port names for a multi-pump lattice: the state vector
     is the tensor lattice of per-pump sideband indices (k_1, ..., k_P) --
     `models.electrical_elements.multipump_frequency_grid` gives that
     lattice's ordering -- on the left (input) side, followed by the same
     lattice on the right (output) side (see `examples/multi_pump_jtl_example.py`,
     which indexes the transmitted port for lattice state `p` at `D + p`).
 
-    The all-zero state is the signal; any other state is an idler offset by
+    The all-zero state is the signal. Any other state is an idler offset by
     that many harmonics of each pump (pump index is 1-based, e.g.
     `idler (p1=-1)` is one harmonic below pump 1).
     """
@@ -185,11 +150,6 @@ class Dashboard:
         if len(labels) != n:
             raise ValueError(f"Got {n} S-matrices but {len(labels)} labels")
 
-        # Port labels, in priority order: explicit `port_labels` > derived
-        # from `ks_state` (single-pump) > derived from `omega_pump`+`Kmax`
-        # (multi-pump, shared by every run) > a generic "port i" fallback.
-        # `port_labels`/`ks_state` may be a single list shared by every run,
-        # or one list per run.
         if port_labels is not None:
             if len(port_labels) == n and all(
                 isinstance(x, (list, tuple)) for x in port_labels
