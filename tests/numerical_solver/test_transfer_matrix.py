@@ -17,9 +17,6 @@ def _random_zy(rng, Nf, m):
 
 def _make_cell(Zs, Yg):
     return CellImmitance(
-        theta=0.0,
-        Zs0_fn=lambda w: 0.0,
-        Yg0_fn=lambda w: 0.0,
         Zs_harm_fn=Zs,
         Yg_harm_fn=Yg,
     )

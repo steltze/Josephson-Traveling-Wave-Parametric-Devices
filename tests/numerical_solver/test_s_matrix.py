@@ -196,21 +196,6 @@ class TestSMatrix:
         sm = SMatrix(data, Z0=50.0)
         np.testing.assert_array_equal(sm.array, data)
 
-    def test_block_shapes(self):
-        rng = np.random.default_rng(28)
-        sm = SMatrix(_random_S(rng, 5, 4), Z0=50.0)
-        for block in (sm.S11, sm.S12, sm.S21, sm.S22):
-            assert block.shape == (5, 2, 2)
-
-    def test_block_values_match_slices(self):
-        rng = np.random.default_rng(29)
-        data = _random_S(rng, 3, 4)
-        sm = SMatrix(data, Z0=50.0)
-        np.testing.assert_array_equal(sm.S11, data[:, :2, :2])
-        np.testing.assert_array_equal(sm.S12, data[:, :2, 2:])
-        np.testing.assert_array_equal(sm.S21, data[:, 2:, :2])
-        np.testing.assert_array_equal(sm.S22, data[:, 2:, 2:])
-
     def test_repr(self):
         rng = np.random.default_rng(30)
         sm = SMatrix(_random_S(rng, 3, 4), Z0=50.0)

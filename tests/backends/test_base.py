@@ -60,6 +60,7 @@ class _StubCell:
     def __init__(self, Zs, Yg):
         self.Zs_harm_fn = Zs
         self.Yg_harm_fn = Yg
+        self.Zs_slot_fn = None
 
 
 class TestDefaultSingleModeMatrixGrid:
