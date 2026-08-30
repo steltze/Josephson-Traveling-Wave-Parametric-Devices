@@ -46,7 +46,6 @@ def numerical_stability_checks(backend: str = "numpy"):
         omega_pump=6.8 * 2 * np.pi,
         omega_j=60 * 2 * np.pi,
         epsilon=0.04,
-        omega_c=3.4 * 2 * np.pi,
         v_ratio=2.5,
         freq_min=3,
         freq_max=7,

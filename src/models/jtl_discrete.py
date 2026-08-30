@@ -116,10 +116,17 @@ class JTLDiscrete:
             if not first:
                 # Exact parallel-LC series impedance: JJ inductor || self-capacitance
                 Ccap_val = 1.0 / (_wj**2 * _L)
-                squid = Component.parallel(
-                    ModulatedInductor(coeffs=coeffs_cell, theta=_th, order=M),
-                    Capacitor(Ccap_val),
-                )
+                if config.epsilon:
+                    # Perturbative parametrization: modulation depth given
+                    # directly via config.epsilon.
+                    inductor = ModulatedInductor(
+                        eps=profile[i] * config.epsilon, theta=_th, order=M, L0=_L
+                    )
+                else:
+                    # Exact Jacobi-Anger/Bessel parametrization, from
+                    # phi_rf_frac/phi_dc_frac.
+                    inductor = ModulatedInductor(coeffs=coeffs_cell, theta=_th, order=M)
+                squid = Component.parallel(inductor, Capacitor(Ccap_val))
                 Zs_harm_arr = squid.impedance_matrix(omega_sb)  # (Nf, n, n)
 
             # Shunt-to-ground capacitor: unmodulated, so it doesn't couple

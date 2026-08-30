@@ -45,9 +45,6 @@ def track_gap_center_over_pump_frequency():
             omega_pump=w_p,
             omega_j=60 * 2 * np.pi,  # usually smaller
             epsilon=0.055,  # 10% inductance modulation (|Φ_RF| = 0.01 Φ_0)
-            omega_c=3.4
-            * 2
-            * np.pi,  # gap: well in the S parameter from signal to tranmission
             v_ratio=2.5,
             freq_min=freq_min,  # GHz
             freq_max=freq_max,  # GHz

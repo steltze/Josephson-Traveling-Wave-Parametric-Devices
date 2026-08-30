@@ -31,7 +31,6 @@ def _base_config():
         omega_pump=6.8 * 2 * np.pi,
         omega_j=60 * 2 * np.pi,
         epsilon=0.06,
-        omega_c=3.4 * 2 * np.pi,
         v_ratio=-2.5,
         freq_min=1,
         freq_max=12,

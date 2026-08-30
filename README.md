@@ -1,9 +1,7 @@
 # Traveling Wave Parametric Devices
 
 Simulation and analysis toolkit for traveling-wave Josephson parametric
-amplifiers and converters (TWPA/TWPC): discrete and continuous transmission
-line models, transfer-matrix / ABCD-matrix solvers, dispersion-relation and
-S-parameter analysis, and an interactive dashboard for inspecting results.
+amplifiers and converters (TWPA/TWPC) based on a lumped-element and discrete transmission line model using transfer-matrices to extract the network S-parameters. This software was developed in the LPENS-Quantic laboratory.
 
 ## Installation
 
@@ -13,7 +11,7 @@ same package set via [`uv.lock`](uv.lock).
 
 ### 1. Install uv
 
-**Linux/macOS**
+**Linux / macOS**
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -25,29 +23,38 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
-(See the [uv install docs](https://docs.astral.sh/uv/getting-started/installation/)
-for other options, e.g. `pipx install uv` or `brew install uv`.)
-
 ### 2. Set up the project
 
-Same command on every platform — uv creates and manages `.venv` for you:
+Same commands on every platform — uv creates and manages `.venv` for you and
+installs the exact Python version pinned in
+[`.python-version`](.python-version):
 
 ```bash
-git clone https://github.com/your-username/your-repo.git
-cd your-repo
+git clone https://github.com/steltze/Josephson-Traveling-Wave-Parametric-Devices.git
+cd Josephson-Traveling-Wave-Parametric-Devices
 uv sync
 ```
 
-Then run anything with `uv run`, e.g. `uv run pytest` or
-`uv run python src/main.py`, without manually activating the virtual
-environment. If you'd rather activate it directly:
+Then run anything with `uv run`, e.g. `uv run pytest`, without manually
+activating the virtual environment. If you'd rather activate it directly:
 
 ```bash
 # Linux/macOS
 source .venv/bin/activate
+```
 
+```powershell
 # Windows (PowerShell)
-.venv\Scripts\activate
+.venv\Scripts\Activate.ps1
+```
+
+If PowerShell refuses to run the activation script (`running scripts is
+disabled on this system`), that's its default script-execution policy —
+either run `uv run <command>` instead of activating, or allow it for the
+current session only:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 ```
 
 Optional extras (also installable individually, e.g. `uv sync --extra numba`):
@@ -66,8 +73,16 @@ If you'd rather not install uv, plain `pip` works too — `pyproject.toml` is
 the source of truth, `uv.lock` is uv-specific:
 
 ```bash
-python3 -m venv .venv          # py -m venv .venv   on Windows
-source .venv/bin/activate      # .venv\Scripts\activate   on Windows
+# Linux/macOS
+python3 -m venv .venv
+source .venv/bin/activate
+pip install ".[dashboard,numba]"
+```
+
+```powershell
+# Windows (PowerShell)
+py -m venv .venv
+.venv\Scripts\Activate.ps1
 pip install ".[dashboard,numba]"
 ```
 

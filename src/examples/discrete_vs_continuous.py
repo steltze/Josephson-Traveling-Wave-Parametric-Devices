@@ -25,7 +25,6 @@ def _base_config(**overrides):
         omega_pump=13.31 * 2 * np.pi,
         omega_j=60 * 2 * np.pi,
         epsilon=0.04,
-        omega_c=3.4 * 2 * np.pi,
         v_ratio=1.0,
         freq_min=1,
         freq_max=14,

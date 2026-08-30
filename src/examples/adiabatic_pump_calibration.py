@@ -33,7 +33,6 @@ def adiabatic_pump_calibration():
         omega_pump=6.8 * 2 * np.pi,
         omega_j=60 * 2 * np.pi,
         epsilon=0.07,
-        omega_c=3.4 * 2 * np.pi,
         v_ratio=-2.5,  # < 0 => counter-propagating
         freq_min=1,
         freq_max=8,

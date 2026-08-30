@@ -34,11 +34,14 @@ class SimulationConfig:
         Pump modulation depth of the series inductance. A single pump tone
         (float) or, for a multi-pump line, one depth per pump (length P) —
         used by models.jtl_discrete_multipump.JTLDiscreteMultiPump and
-        models.jtl_discrete_slot_mode.JTLDiscreteSlotMode. JTLDiscrete
-        does NOT use this field -- it takes its pump amplitude from
-        `phi_rf_frac`/`phi_dc_frac` instead (see below), the physical
-        flux-fraction parametrization, rather than mixing the two
-        conventions.
+        models.jtl_discrete_slot_mode.JTLDiscreteSlotMode. JTLDiscrete also
+        uses it when nonzero, picking ModulatedInductor's perturbative
+        (`eps`) parametrization instead of its default exact
+        Jacobi-Anger/Bessel (`coeffs`) parametrization taken from
+        `phi_rf_frac`/`phi_dc_frac` (see below) -- the two conventions are
+        not mixed, so setting `epsilon` here overrides
+        `phi_rf_frac`/`phi_dc_frac` for JTLDiscrete rather than combining
+        with them.
     phi_rf_frac : float
         Physical pump AC flux drive, Phi_RF / Phi0 (mirrors
         JosephsonCircuits.jl's `Phi_ac_frac`). JTLDiscrete's pump
@@ -55,15 +58,13 @@ class SimulationConfig:
         cos(pi*phi_dc_frac), and the 3-wave-mixing strength as
         sin(pi*phi_dc_frac) -- zero at zero bias, maximal at 0.25
         (quarter flux quantum, the standard 3WM operating point).
-    omega_c : float
-        Target centre angular frequency for phase matching (rad/GHz).
     v_ratio : float | list[float]
         v_signal / v_pump — how much slower the pump is vs the signal.
         Float for single-pump, length-P list matching `epsilon` for
         multi-pump.
-    omega_pump : float | list[float] | None
+    omega_pump : float | list[float]
         Pump angular frequency (rad/GHz), float or length-P list matching
-        `epsilon`. If None, derived elementwise as v_ratio * omega_c.
+        `epsilon`.
     Kmax : list[tuple[int, int]] | None
         Multi-pump only: per-pump (k_min, k_max) sideband range (length P,
         matching `epsilon`), e.g. [(-2, 3), (-1, 1)] -- need not be
@@ -127,9 +128,8 @@ class SimulationConfig:
     epsilon: float | list[float] = 0.0
     phi_rf_frac: float = 0.05
     phi_dc_frac: float = 1/3
-    omega_c: float = 5 * 2 * np.pi
     v_ratio: float | list[float] = 3.0
-    omega_pump: float | list[float] | None = None  # None → v_ratio * omega_c
+    omega_pump: float | list[float] = 15 * 2 * np.pi
     Kmax: list[tuple[int, int]] | None = None  # multi-pump per-pump (k_min, k_max)
 
     # Frequency sweep (GHz)
@@ -156,12 +156,6 @@ class SimulationConfig:
     omega_cutoff_coupling: float = 50 * 2 * np.pi
 
     def __post_init__(self) -> None:
-        if self.omega_pump is None:
-            if isinstance(self.v_ratio, list):
-                self.omega_pump = [vr * self.omega_c for vr in self.v_ratio]
-            else:
-                self.omega_pump = self.v_ratio * self.omega_c
-
         multi_pump = isinstance(self.epsilon, list)
         if multi_pump:
             P = len(self.epsilon)
