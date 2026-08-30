@@ -3,7 +3,7 @@ using Plots
 gr()
 
 Z0 = 50.0                          # Ohm, port impedance
-nr_cells = 321
+nr_cells = 320
 cell_size = 10e-6                  # m
 
 omega_cutoff_cfg = 2 * 50 / 530e-3 # rad/ns  -> f_cutoff ~ 30 GHz (CONFIRM this is intended)

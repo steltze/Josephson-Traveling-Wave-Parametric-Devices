@@ -2,7 +2,9 @@ import os
 import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.insert(0, os.path.dirname(__file__))
 
+import matplotlib as mpl
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -14,8 +16,12 @@ from analysis.checks import (
     check_photon_flux_conservation,
 )
 from dashboard import Dashboard
+from utils import COLOR_PYTHON, PAPER_STYLE
 
 log = get_logger(__name__)
+
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+FIGURES_DIR = os.path.join(REPO_ROOT, "figures")
 
 
 def julia_comparison(dashboard):
@@ -82,19 +88,35 @@ def julia_comparison(dashboard):
             ks_state=cfg.ks_state,
         ).run()
     else:
-        _, ax = plt.subplots()
-
         signal_left_index = ks_state.index(0)
         signal_right_index = len(ks_state) + signal_left_index
 
         S21 = S_params[:, signal_right_index, signal_left_index]  # port1 -> port2, direct
         S12 = S_params[:, signal_left_index+1, signal_left_index]  # port2 -> port1, direct
 
-        ax.plot(cfg.freqs, 20 * np.log10(np.abs(S21)), label="S21")
-        ax.plot(cfg.freqs, 20 * np.log10(np.abs(S12)), label="S12")
-        ax.set_xlabel("Signal Frequency (GHz)")
-        ax.set_ylabel("|S| (dB)")
-        ax.legend()
+        with mpl.rc_context(PAPER_STYLE):
+            fig, ax = plt.subplots(figsize=(3.4, 2.6))
+
+            ax.plot(
+                cfg.freqs, 20 * np.log10(np.abs(S21)),
+                color=COLOR_PYTHON, lw=1.5, solid_capstyle="round",
+            )
+            ax.set_xlabel("Signal frequency (GHz)")
+            ax.set_ylabel("|S| (dB)")
+            ax.set_title("Direct transmission (signal → signal)", loc="left")
+            ax.grid(True, alpha=0.3, linewidth=0.5)
+            ax.spines["top"].set_visible(False)
+            ax.spines["right"].set_visible(False)
+            fig.tight_layout()
+
+            os.makedirs(FIGURES_DIR, exist_ok=True)
+            svg_path = os.path.join(FIGURES_DIR, "julia_comparison_s21.svg")
+            fig.savefig(svg_path)
+            log.info("Saved %s", svg_path)
+            png_path = os.path.join(FIGURES_DIR, "julia_comparison_s21.png")
+            fig.savefig(png_path, dpi=300)
+            log.info("Saved %s", png_path)
+
         plt.show()
 
 

@@ -21,6 +21,35 @@ mpl.rcParams.update(
     }
 )
 
+# Validated categorical palette (color-blind-safe, checked with dataviz's
+# validate_palette.js): slot 1 (blue) / slot 2 (orange), fixed identity order.
+COLOR_PYTHON = "#2a78d6"
+COLOR_JULIA = "#eb6834"
+
+# Paper-figure style: apply with `with mpl.rc_context(PAPER_STYLE):` around a
+# specific figure rather than globally, so it doesn't affect other plots.
+PAPER_STYLE = {
+    "font.family": "serif",
+    "font.serif": ["STIX Two Text", "STIXGeneral", "Times New Roman", "DejaVu Serif"],
+    "mathtext.fontset": "stix",
+    "font.size": 9,
+    "axes.titlesize": 9.5,
+    "axes.labelsize": 9,
+    "axes.linewidth": 0.7,
+    "xtick.labelsize": 8,
+    "ytick.labelsize": 8,
+    "xtick.major.width": 0.7,
+    "ytick.major.width": 0.7,
+    "legend.fontsize": 8,
+    "legend.frameon": False,
+    "figure.titlesize": 10,
+    "lines.linewidth": 1.4,
+    "grid.linewidth": 0.5,
+    "svg.fonttype": "none",
+    "savefig.bbox": "tight",
+    "savefig.pad_inches": 0.02,
+}
+
 _FIG_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "figures")
 
 

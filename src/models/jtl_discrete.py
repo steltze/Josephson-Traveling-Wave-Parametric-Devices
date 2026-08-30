@@ -75,9 +75,9 @@ class JTLDiscrete:
         wj = 1.0 / np.sqrt(L * Cs_jj)
 
         w_p = config.omega_pump
-        thetas = w_p / v_p * ns * a
+        # thetas = w_p / v_p * ns * a
 
-        # thetas = np.sign(config.v_ratio)*dispersion_bloch(w_p, config.omega_cutoff / config.v_ratio) * ns
+        thetas = np.sign(config.v_ratio)*dispersion_bloch(w_p, config.omega_cutoff / config.v_ratio) * ns
 
 
         M = config.M

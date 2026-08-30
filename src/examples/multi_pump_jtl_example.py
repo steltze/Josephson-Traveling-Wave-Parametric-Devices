@@ -3,6 +3,7 @@ import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+import matplotlib as mpl
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -10,11 +11,14 @@ from simulation import SimulationConfig, Simulation
 from models.jtl_discrete_multipump import JTLDiscreteMultiPump
 from models.electrical_elements import multipump_frequency_grid
 from analysis.checks import check_photon_flux_conservation
-from examples.utils import save_all
+from examples.utils import COLOR_JULIA, COLOR_PYTHON, PAPER_STYLE
 from dashboard import Dashboard
 from logger import get_logger, setup_logging
 
 log = get_logger(__name__)
+
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+FIGURES_DIR = os.path.join(REPO_ROOT, "figures")
 
 
 def two_pump_jtl(cell_topology: str = "pi", backend=None, dashboard=False):
@@ -47,7 +51,7 @@ def two_pump_jtl(cell_topology: str = "pi", backend=None, dashboard=False):
         omega_cutoff=2 * 50 / 540e-3,
         omega_j=60 * 2 * np.pi,
         omega_pump=[10.0 * 2 * np.pi, 13.2 * 2 * np.pi],
-        epsilon=[0.05, 0.05],
+        epsilon=[0.05, 0.07],
         v_ratio=[2.5, -6.0],
         Kmax=[(-1, 1), (-1, 1)],
         freq_min=1,
@@ -66,9 +70,7 @@ def two_pump_jtl(cell_topology: str = "pi", backend=None, dashboard=False):
     )
     S_total = sim.get_s_matrix(normalize=True).array  # (Nf, N, N)
 
-    # Flat lattice index of each tracked (k1, k2) state, in the same
-    # left-port order the S-matrix uses; the transmitted (right) port for
-    # state index p sits at D + p.
+
     _, labels = multipump_frequency_grid(0.0, cfg.omega_pump, cfg.Kmax)
     D = len(labels)
     signal_idx = labels.index((0, 0))
@@ -93,52 +95,61 @@ def two_pump_jtl(cell_topology: str = "pi", backend=None, dashboard=False):
     # is a stronger, more physically meaningful check than plain unitarity.
     check = check_photon_flux_conservation(
         S_total, cfg.omegas, cfg.omega_pump, cfg.Kmax
-    )  # (Nf, N)
-    port_omegas_half = np.stack(
-        [multipump_frequency_grid(ws, cfg.omega_pump, cfg.Kmax)[0] for ws in cfg.omegas]
-    )  # (Nf, D)
-    eta = np.sign(
-        np.concatenate([port_omegas_half, port_omegas_half], axis=1)
-    )  # (Nf, N)
-    residual = np.abs(check)  # (Nf, N) -- should sit near machine precision
+    )  # (Nf, N) -- should sit near 1.0
+    max_residual = np.abs(np.abs(check) - 1.0).max()
+    log.info("Photon-flux conservation: max |residual - 1| = %.3e", max_residual)
 
-    fig, (ax, ax2) = plt.subplots(2, 1, figsize=(8, 9), sharex=True)
-    ax.plot(
-        freqs,
-        10 * np.log10(S31_signal + 1e-15),
-        label=r"signal left $\rightarrow$ signal right",
-    )
-    ax.plot(
-        freqs,
-        10 * np.log10(S_idler1 + 1e-15),
-        label=rf"signal right $\rightarrow$ signal left",
-    )
-    # ax.plot(
-    #     freqs,
-    #     10 * np.log10(S_idler2 + 1e-15),
-    #     label=rf"signal $\rightarrow$ idler$_2$ ($\omega_s+\omega_{{p2}}$, $f_{{p2}}={fp2:.2f}$ GHz)",
-    # )
-    # ax.plot(
-    #     freqs,
-    #     10 * np.log10(S_idler3 + 1e-15),
-    #     label=rf"signal $\rightarrow$ idler$_3$ ($\omega_s+\omega_{{p1}}+\omega_{{p2}}$, $f_{{p1}}+f_{{p2}}={fp1 + fp2:.2f}$ GHz)",
-    # )
-    ax.set_ylabel(r"$|S|^2$ (dB)")
-    ax.set_title(f"Two-pump JTL — {cell_topology} cell, N={cfg.ncell}, ε={cfg.epsilon}")
-    ax.legend()
-    ax.grid(True, alpha=0.3)
+    with mpl.rc_context(PAPER_STYLE):
+        fig, ax = plt.subplots(figsize=(3.6, 3.0))
+        ax.plot(
+            freqs,
+            10 * np.log10(S31_signal + 1e-15),
+            label=r"signal left $\rightarrow$ signal right",
+            color=COLOR_PYTHON, lw=1.5, solid_capstyle="round",
+        )
+        ax.plot(
+            freqs,
+            10 * np.log10(S_idler1 + 1e-15),
+            label=r"signal right $\rightarrow$ signal left",
+            color=COLOR_JULIA, lw=1.5, solid_capstyle="round",
+        )
+        # ax.plot(
+        #     freqs,
+        #     10 * np.log10(S_idler2 + 1e-15),
+        #     label=rf"signal $\rightarrow$ idler$_2$ ($\omega_s+\omega_{{p2}}$, $f_{{p2}}={fp2:.2f}$ GHz)",
+        # )
+        # ax.plot(
+        #     freqs,
+        #     10 * np.log10(S_idler3 + 1e-15),
+        #     label=rf"signal $\rightarrow$ idler$_3$ ($\omega_s+\omega_{{p1}}+\omega_{{p2}}$, $f_{{p1}}+f_{{p2}}={fp1 + fp2:.2f}$ GHz)",
+        # )
+        ax.set_ylabel(r"$|S|^2$ (dB)")
+        ax.set_title(
+            f"Two-pump JTL",
+            loc="left",
+        )
+        ax.set_xlabel("Signal frequency (GHz)")
+        ax.grid(True, alpha=0.3, linewidth=0.5)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
 
-    ax2.plot(freqs, residual[:, signal_idx] + 1e-20, label="signal port")
-    ax2.plot(freqs, residual[:, idler1_idx] + 1e-20, label=r"idler$_1$ port")
-    ax2.axhline(1.0, color="grey", ls="--", lw=1, label="1.0 reference")
-    ax2.set_xlabel("Signal frequency (GHz)")
-    ax2.set_ylabel(r"$\Sigma_i \eta_i |S_{ij}|^2$")
-    ax2.set_title("Photon-flux (Manley-Rowe) conservation residual")
-    ax2.legend()
-    ax2.grid(True, alpha=0.3)
-    plt.tight_layout()
+        # Figure-level legend above the panel -- keeps it clear of the data
+        # instead of fighting for empty space inside the axes.
+        handles, labels = ax.get_legend_handles_labels()
+        fig.tight_layout(h_pad=1.2, rect=(0, 0, 1, 0.85))
+        fig.legend(
+            handles, labels, loc="upper center", bbox_to_anchor=(0.56, 0.95),
+            ncol=1, frameon=False, handlelength=2.6,
+        )
 
-    # save_all(prefix="multi_pump_jtl_example", fmt="svg")
+        os.makedirs(FIGURES_DIR, exist_ok=True)
+        svg_path = os.path.join(FIGURES_DIR, "multi_pump_jtl_example.svg")
+        fig.savefig(svg_path)
+        log.info("Saved %s", svg_path)
+        png_path = os.path.join(FIGURES_DIR, "multi_pump_jtl_example.png")
+        fig.savefig(png_path, dpi=300)
+        log.info("Saved %s", png_path)
+
     plt.show()
 
     if dashboard:

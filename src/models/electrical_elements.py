@@ -18,10 +18,10 @@ def band_coupling_phased(n: int, offset: int, theta: float) -> np.ndarray:
     idx = np.arange(n - abs(offset))
     M[idx, idx + abs(offset)] = 0.5*np.exp(
         1j * abs(offset) * theta
-    )  # target < source: down-shift
+    ) 
     M[idx + abs(offset), idx] = 0.5*np.exp(
         -1j * abs(offset) * theta
-    )  # target > source: up-shift
+    )
     return M
 
 
@@ -125,29 +125,57 @@ class Capacitor(Component):
 
 class ModulatedInductor(Component):
     """
-    Pump-modulated (Josephson) inductor, specified by the ABSOLUTE inverse-
-    inductance harmonics.
+    Pump-modulated (Josephson) inductor. Two calling conventions, chosen by
+    whether `eps` is given:
 
-        Linv(t) = sum_{p>=0} c[p] * cos(p*theta)   [1/henry]
+    - `coeffs` (exact): `coeffs` are the ABSOLUTE inverse-inductance
+      harmonics, in 1/H --
 
-    so the inverse-inductance matrix over sidebands is
+          Linv(t) = sum_{p>=0} c[p] * cos(p*theta)
 
-        Linv_mat = c[0]*I + sum_{p>=1} c[p] * band_coupling_phased(n, p, theta)
+      so the inverse-inductance matrix over sidebands is
 
-    and the series impedance is  Z = j*Omega * L = j*Omega * inv(Linv_mat).
+          Linv_mat = c[0]*I + sum_{p>=1} c[p] * band_coupling_phased(n, p, theta)
 
-    `coeffs` must include the DC term as coeffs[0] (the identity coefficient),
-    and coeffs[p] for p>=1 are the harmonic couplings. All have units 1/H.
+      and the series impedance is  Z = j*Omega * inv(Linv_mat). `coeffs`
+      must include the DC term as coeffs[0]. This is what a Jacobi-Anger/
+      Bessel expansion produces directly -- see JTLDiscrete/
+      JTLDiscreteSQUID.build.
+
+    - `eps` (perturbative, the original form this class had before the
+      `coeffs` convention above): a small modulation-depth expansion of the
+      inductance itself (not its inverse) --
+
+          L(t)/L0 = I + sum_p eps^p * coeffs[p] * band_coupling_phased(n, p, theta)
+
+      and Z = j*Omega * (L0 * L/L0). Here `coeffs` (if given) are RELATIVE
+      per-harmonic weights, defaulting to 1.0 for p=1..order -- not absolute
+      1/H values as in the coeffs-only path above. `theta` is the pump's
+      propagation phase at this cell's position (e.g. omega_pump/v_pump * z),
+      applied via band_coupling_phased just like the coeffs-only path.
     """
 
-    def __init__(self, coeffs, theta=0.0, order=None):
+    def __init__(self, coeffs=None, theta=0.0, order=None, L0=None, eps=None):
         self.theta = theta
-        self.coeffs = coeffs           # {0: c0, 1: c1, ...} in 1/H
-        self.order = order if order is not None else max(coeffs)
+        self.L0 = L0
+        self.eps = eps
+        if eps is not None:
+            self.order = order if order is not None else 1
+            self.coeffs = coeffs if coeffs is not None else {p: 1.0 for p in range(1, self.order + 1)}
+        else:
+            self.coeffs = coeffs           # {0: c0, 1: c1, ...} in 1/H
+            self.order = order if order is not None else max(coeffs)
 
     def impedance(self, omega):
         omega = np.atleast_2d(np.asarray(omega, dtype=float))  # (Nf, n)
         Nf, n = omega.shape
+
+        if self.eps is not None:
+            L = np.eye(n, dtype=complex)
+            for p, a in self.coeffs.items():
+                L = L + (self.eps ** p) * a * band_coupling_phased(n, p, self.theta)
+            Z = 1j * omega[:, :, None] * (self.L0 * L)[None, :, :]
+            return Z
 
         # build the inverse-inductance matrix (1/H)
         Linv = self.coeffs.get(0, 0.0) * np.eye(n, dtype=complex)
@@ -355,7 +383,6 @@ if __name__ == "__main__":
     Z = comp.impedance(grid)
     print("\nimpedance shape:", Z.shape)
 
-    # confirm: (0,0)->(1,1) entry is ZERO (no single-cell double hop)
     lut = {lab: i for i, lab in enumerate(labels)}
     print(
         "\n(0,0)->(1,0) coupling in L/L0 =",

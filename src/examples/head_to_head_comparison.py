@@ -9,11 +9,13 @@ sys.path.insert(0, os.path.dirname(__file__))
 import matplotlib
 
 matplotlib.use("Agg")
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 
 from logger import get_logger, setup_logging
 from simulation import Simulation
+from utils import COLOR_JULIA, COLOR_PYTHON, PAPER_STYLE
 
 log = get_logger(__name__)
 
@@ -93,31 +95,55 @@ def main(skip_julia: bool):
     freqs_jl, S21_jl, S31_jl, S11_jl = run_julia(skip_julia)
 
     os.makedirs(FIGURES_DIR, exist_ok=True)
-    fig, axes = plt.subplots(3, 1, figsize=(9, 11), sharex=True)
 
-    for ax, (S_p, S_j, title) in zip(
-        axes,
-        [
-            (S31_py, S31_jl, "S31 -- conversion (signal -> idler)"),
-            (S21_py, S21_jl, "S21 -- direct transmission (signal -> signal)"),
-            (S11_py, S11_jl, "S11 -- input return loss"),
-        ],
-    ):
-        ax.plot(freqs_py, dB(S_p), label="Python (transfer-matrix)", color="C0")
-        ax.plot(freqs_jl, dB(S_j), label="Julia (JosephsonCircuits.jl)", color="C1",
-                 ls="--")
-        ax.set_ylabel("dB")
-        ax.set_title(title)
-        ax.legend(loc="lower right")
-        ax.grid(True, alpha=0.25)
+    with mpl.rc_context(PAPER_STYLE):
+        fig, axes = plt.subplots(
+            2, 1, figsize=(3.4, 4.6), sharex=True,
+            gridspec_kw={"height_ratios": [1.15, 1]},
+        )
 
-    axes[-1].set_xlabel("Signal frequency (GHz)")
-    fig.suptitle("Head-to-head: Python vs. JosephsonCircuits.jl")
-    fig.tight_layout()
+        for ax, (S_p, S_j, title) in zip(
+            axes,
+            [
+                (S21_py, S21_jl, "Direct transmission (signal → signal)"),
+                (S31_py, S31_jl, "Conversion (signal → idler)"),
+            ],
+        ):
+            ax.plot(
+                freqs_py, dB(S_p), label="Python (transfer-matrix)",
+                color=COLOR_PYTHON, lw=1.5, zorder=2, solid_capstyle="round",
+            )
+            ax.plot(
+                freqs_jl, dB(S_j), label="Julia (JosephsonCircuits.jl)",
+                color=COLOR_JULIA, lw=1.3, zorder=3, ls=(0, (1, 1.4)),
+                dash_capstyle="round",
+            )
+            ax.set_ylabel("|S| (dB)")
+            ax.set_title(title, loc="left")
+            ax.grid(True, alpha=0.3, linewidth=0.5)
+            ax.spines["top"].set_visible(False)
+            ax.spines["right"].set_visible(False)
 
-    outpath = os.path.join(FIGURES_DIR, "head_to_head_comparison.png")
-    fig.savefig(outpath, dpi=130)
-    log.info("Saved %s", outpath)
+        axes[0].set_xlim(1, 8)
+        axes[-1].set_xlabel("Signal frequency (GHz)")
+        fig.align_ylabels(axes)
+
+        # Figure-level legend above both panels -- keeps it clear of the
+        # data instead of fighting for empty space inside an axes.
+        handles, labels = axes[0].get_legend_handles_labels()
+        fig.tight_layout(h_pad=1.2, rect=(0, 0, 1, 0.93))
+        fig.legend(
+            handles, labels, loc="upper center", bbox_to_anchor=(0.56, 1.0),
+            ncol=1, frameon=False, handlelength=2.6,
+        )
+
+        svg_path = os.path.join(FIGURES_DIR, "head_to_head_comparison.svg")
+        fig.savefig(svg_path)
+        log.info("Saved %s", svg_path)
+
+        png_path = os.path.join(FIGURES_DIR, "head_to_head_comparison.png")
+        fig.savefig(png_path, dpi=300)
+        log.info("Saved %s", png_path)
 
     i_py = np.argmax(dB(S31_py))
     i_jl = np.argmax(dB(S31_jl))
