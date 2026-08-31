@@ -5,44 +5,63 @@ from functools import reduce
 import numpy as np
 
 
-def band_coupling_phased(n: int, offset: int, theta: float) -> np.ndarray:
-    """n x n complex band-coupling matrix for a pump modulation cos(w_p t - theta).
+def band_coupling_phased(n: int, offset: int, theta) -> np.ndarray:
+    """(..., n, n) complex band-coupling matrix(es) for a pump modulation
+    cos(w_p t - theta). `theta` is a scalar (returns (n, n)) or an array,
+    e.g. one theta per cell (returns (*theta.shape, n, n)) -- batches over
+    whatever leading shape `theta` carries instead of building one matrix
+    per call, so e.g. JTLDiscrete.build can construct every cell's coupling
+    matrix in one vectorized call.
 
-    Entry [target, source]: a target sideband above its source (up-shift,
-    towards +w_p) picks up exp(-i*offset*theta); a target below its source
-    (down-shift) picks up the conjugate exp(+i*offset*theta). Must stay a conjugate
-    pair (not the same phase on both diagonals) or the sideband-coupling
-    matrix stops being passive/lossless (fails Manley-Rowe / pseudo-unitarity).
+    Entry [..., target, source]: a target sideband above its source
+    (up-shift, towards +w_p) picks up exp(-i*offset*theta); a target below
+    its source (down-shift) picks up the conjugate exp(+i*offset*theta).
+    Must stay a conjugate pair (not the same phase on both diagonals) or the
+    sideband-coupling matrix stops being passive/lossless (fails Manley-Rowe
+    / pseudo-unitarity).
     """
-    M = np.zeros((n, n), dtype=complex)
+    theta = np.asarray(theta, dtype=float)
+    out = np.zeros(theta.shape + (n, n), dtype=complex)
     if abs(offset) >= n or offset == 0:
-        return M
+        return out
     idx = np.arange(n - abs(offset))
-    M[idx, idx + abs(offset)] = 0.5*np.exp(
-        1j * abs(offset) * theta
-    ) 
-    M[idx + abs(offset), idx] = 0.5*np.exp(
-        -1j * abs(offset) * theta
-    )
-    return M
+    phase = np.exp(1j * abs(offset) * theta)  # theta.shape
+    out[..., idx, idx + abs(offset)] = 0.5 * phase[..., None]
+    out[..., idx + abs(offset), idx] = 0.5 * np.conj(phase)[..., None]
+    return out
 
 
-def _is_matrix(value: np.ndarray) -> bool:
-    """True for a genuine (..., n, n) sideband-coupling matrix, as opposed
-    to a per-sideband array of independent scalar values. Squareness alone
-    isn't enough: a per-sideband array on a batched (Nf, n) grid also has
-    ndim 2, and is square too whenever Nf happens to equal n. A genuine
-    coupling matrix carries the sideband axis *in addition to* the Nf
-    batch axis (Nf, n, n) -- ndim > 2, not just square, is what actually
-    distinguishes the two."""
-    return value.ndim == 3 and value.shape[-1] == value.shape[-2]
+def _trail(x) -> np.ndarray:
+    """x, shape (*batch,) -> (*batch, 1, 1) -- pads two trailing singleton
+    axes so a per-cell (or unbatched, scalar) coefficient broadcasts against
+    a (*batch, n, n) matrix."""
+    x = np.asarray(x)
+    return x.reshape(x.shape + (1, 1))
 
 
-def _invert(value: np.ndarray) -> np.ndarray:
-    value = np.asarray(value)
-    if _is_matrix(value):
-        return np.linalg.inv(value)
-    return 1.0 / value
+def _trail_like(x, omega: np.ndarray) -> np.ndarray:
+    """x, shape (*batch,) -> (*batch, 1, ..., 1) with one trailing singleton
+    per axis of `omega` -- pads a per-cell (or unbatched, scalar) component
+    value so it broadcasts against `omega`, whatever `omega`'s shape is
+    (Inductor/Capacitor, unlike ModulatedInductor, don't force omega to a
+    particular ndim -- see their docstrings)."""
+    x = np.asarray(x)
+    omega = np.asarray(omega)
+    return x.reshape(x.shape + (1,) * omega.ndim)
+
+
+def _impedance_from_inductance(Lmat: np.ndarray, omega: np.ndarray) -> np.ndarray:
+    """Z[..., f, a, b] = j * omega[f, a] * Lmat[..., a, b].
+
+    Lmat: (*batch, n, n); omega: (Nf, n). Returns (*batch, Nf, n, n) --
+    generalizes `Z = j*Omega*L` (each sideband row scaled by its own omega)
+    to an arbitrary leading batch shape on `Lmat` (e.g. one L per cell), not
+    just a single (n, n) matrix.
+    """
+    Nf, n = omega.shape
+    omega_b = omega.reshape((1,) * (Lmat.ndim - 2) + (Nf, n, 1))
+    Lmat_b = Lmat[..., None, :, :]
+    return 1j * omega_b * Lmat_b
 
 
 def _diag_promote(value: np.ndarray) -> np.ndarray:
@@ -57,9 +76,19 @@ def _diag_promote(value: np.ndarray) -> np.ndarray:
     return out
 
 
-def _sum_immittances(values: list[np.ndarray]) -> np.ndarray:
-    values = [np.asarray(v) for v in values]
-    matrices = [v for v in values if _is_matrix(v)]
+def _sum_immittances(pairs: list[tuple[np.ndarray, bool]]) -> np.ndarray:
+    """
+    Whether a value needs diagonal-promotion before summing is looked up
+    from each component's own static `couples_sidebands` flag (passed in by
+    the caller), not guessed from the value's array shape: shape alone can't
+    reliably tell a diagonal (..., Nf, n) representation apart from a
+    genuine (..., n, n) matrix whenever Nf happens to equal n, and that
+    ambiguity gets worse, not better, once a per-cell batch axis is added on
+    top (see JTLDiscrete.build) -- so this never inspects `value.shape` to
+    decide, only `couples_sidebands`.
+    """
+    values = [np.asarray(v) for v, _ in pairs]
+    matrices = [v for v, is_matrix in pairs if is_matrix]
     if not matrices:
         return sum(values)
 
@@ -68,8 +97,8 @@ def _sum_immittances(values: list[np.ndarray]) -> np.ndarray:
         raise ValueError(f"sideband dimensions don't match across components: {ns}")
 
     total = np.zeros(matrices[0].shape, dtype=complex)
-    for v in values:
-        total = total + (v if _is_matrix(v) else _diag_promote(v))
+    for v, is_matrix in pairs:
+        total = total + (v if is_matrix else _diag_promote(v))
     return total
 
 
@@ -82,23 +111,27 @@ class Component:
     impedance/admittance are duals of each other via matrix/scalar inversion.
     """
 
+    couples_sidebands = False
+
     def impedance(self, omega):
-        return _invert(self.admittance(omega))
+        Y = self.admittance(omega)
+        return np.linalg.inv(Y) if self.couples_sidebands else 1.0 / Y
 
     def admittance(self, omega):
-        return _invert(self.impedance(omega))
+        Z = self.impedance(omega)
+        return np.linalg.inv(Z) if self.couples_sidebands else 1.0 / Z
 
     def impedance_matrix(self, omega):
         """impedance(omega) as an (..., n, n) matrix, diagonal if this
         component doesn't couple sidebands."""
         Z = np.asarray(self.impedance(omega))
-        return Z if _is_matrix(Z) else _diag_promote(Z)
+        return Z if self.couples_sidebands else _diag_promote(Z)
 
     def admittance_matrix(self, omega):
         """admittance(omega) as an (..., n, n) matrix, diagonal if this
         component doesn't couple sidebands."""
         Y = np.asarray(self.admittance(omega))
-        return Y if _is_matrix(Y) else _diag_promote(Y)
+        return Y if self.couples_sidebands else _diag_promote(Y)
 
     @staticmethod
     def series(*components: Component) -> Component:
@@ -114,7 +147,16 @@ class Inductor(Component):
         self.L = L
 
     def impedance(self, omega):
-        return 1j * np.asarray(omega) * self.L
+        """
+        `L` may be a scalar (single cell) or an array, e.g. one per cell, in
+        which case the result batches over that leading shape: (*batch,
+        *omega.shape) -- `_trail_like` appends one trailing singleton axis
+        per axis of `omega` so a per-cell L broadcasts against it, whatever
+        `omega`'s shape is (an unbatched, e.g. scalar, L broadcasts fine
+        either way, so this doesn't change the single-cell result).
+        """
+        omega = np.asarray(omega)
+        return 1j * omega * _trail_like(self.L, omega)
 
 
 class Capacitor(Component):
@@ -122,7 +164,10 @@ class Capacitor(Component):
         self.C = C
 
     def impedance(self, omega):
-        return 1.0 / (1j * np.asarray(omega) * self.C)
+        """`C` may be a scalar or an array (e.g. one per cell) -- see
+        Inductor.impedance for the batching/broadcasting convention."""
+        omega = np.asarray(omega)
+        return 1.0 / (1j * omega * _trail_like(self.C, omega))
 
 
 class ModulatedInductor(Component):
@@ -157,6 +202,8 @@ class ModulatedInductor(Component):
       applied via band_coupling_phased just like the coeffs-only path.
     """
 
+    couples_sidebands = True
+
     def __init__(self, coeffs=None, theta=0.0, order=None, L0=None, eps=None):
         self.theta = theta
         self.L0 = L0
@@ -169,26 +216,39 @@ class ModulatedInductor(Component):
             self.order = order if order is not None else max(coeffs)
 
     def impedance(self, omega):
+        """
+        `theta`/`eps`/`L0`/`coeffs` values may each be a scalar (single
+        cell -- the original contract) or an array sharing a common leading
+        batch shape (e.g. one value per cell), in which case the result
+        batches over that shape: (*batch, Nf, n, n) instead of (Nf, n, n).
+        This lets a caller build every cell's impedance in one call instead
+        of constructing one ModulatedInductor per cell.
+        """
         omega = np.atleast_2d(np.asarray(omega, dtype=float))  # (Nf, n)
         Nf, n = omega.shape
+        theta = np.asarray(self.theta, dtype=float)
 
         if self.eps is not None:
+            eps = np.asarray(self.eps, dtype=float)
             L = np.eye(n, dtype=complex)
             for p, a in self.coeffs.items():
-                L = L + (self.eps ** p) * a * band_coupling_phased(n, p, self.theta)
-            Z = 1j * omega[:, :, None] * (self.L0 * L)[None, :, :]
-            return Z
+                Bp = band_coupling_phased(n, p, theta)  # theta.shape + (n, n)
+                L = L + _trail(eps**p) * _trail(a) * Bp
+            Lmat = _trail(self.L0) * L                  # (*batch, n, n)
+            return _impedance_from_inductance(Lmat, omega)
 
         # build the inverse-inductance matrix (1/H)
         Linv = self.coeffs.get(0, 0.0) * np.eye(n, dtype=complex)
         for p, c in self.coeffs.items():
             if p == 0:
                 continue
-            Linv = Linv + c * band_coupling_phased(n, p, self.theta)
+            Bp = band_coupling_phased(n, p, theta)  # theta.shape + (n, n)
+            Linv = Linv + _trail(c) * Bp
 
-        # invert to get L, then Z = j*Omega*L
-        Lmat = np.linalg.inv(Linv)                      # (n, n)
-        return 1j * omega[:, :, None] * Lmat[None, :, :]
+        # invert to get L, then Z = j*Omega*L -- np.linalg.inv batches over
+        # any leading dims, so this is one call regardless of batch shape.
+        Lmat = np.linalg.inv(Linv)
+        return _impedance_from_inductance(Lmat, omega)
 
 
 class _Combination(Component):
@@ -198,14 +258,22 @@ class _Combination(Component):
         self.components = components
         self.mode = mode
 
+    @property
+    def couples_sidebands(self) -> bool:
+        return any(c.couples_sidebands for c in self.components)
+
     def impedance(self, omega):
         if self.mode == "series":
-            return _sum_immittances([c.impedance(omega) for c in self.components])
+            return _sum_immittances(
+                [(c.impedance(omega), c.couples_sidebands) for c in self.components]
+            )
         return super().impedance(omega)
 
     def admittance(self, omega):
         if self.mode == "parallel":
-            return _sum_immittances([c.admittance(omega) for c in self.components])
+            return _sum_immittances(
+                [(c.admittance(omega), c.couples_sidebands) for c in self.components]
+            )
         return super().admittance(omega)
 
 
@@ -256,6 +324,8 @@ class ModulatedInductorMultiPump(Component):
         omega_pj/v_pj * z), same role as `theta` in ModulatedInductor.
         Defaults to 0.0 for every pump.
     """
+
+    couples_sidebands = True
 
     def __init__(self, L0, eps, n_sidebands, order=1, coeffs=None, theta=None):
         self.L0 = L0

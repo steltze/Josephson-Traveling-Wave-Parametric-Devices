@@ -196,6 +196,20 @@ SWEEP_CONFIGS = [
         "nmod": 3,
         "npump": 3,
     },
+    {
+        "label": "M=4, 8 bands",
+        "ks_state": [-4, -3, -2, -1, 0, 1, 2, 3, 4],
+        "M": 4,
+        "nmod": 4,
+        "npump": 4,
+    },
+        {
+        "label": "M=5, 10 bands",
+        "ks_state": [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5],
+        "M": 5,
+        "nmod": 5,
+        "npump": 5,
+    },
 ]
 
 
@@ -261,7 +275,7 @@ def run_sweep(repeats: int, ncell: int, n_freqs: int):
             "%s is %.2fx faster (Julia/Python warm-time ratios: %s)",
             len(warm_speedups), direction,
             geo_mean if geo_mean >= 1 else 1 / geo_mean,
-            ", ".join(f"{s:.2f}x" for s in warm_speedups),
+            ", ".join(f"{s:.2f}xs" for s in warm_speedups),
         )
 
 
@@ -393,7 +407,7 @@ def main(skip_julia: bool, repeats: int = BENCH_REPEATS, python_backend: str = "
 
 if __name__ == "__main__":
     repeats = BENCH_REPEATS
-    sweep_ncell, sweep_n_freqs = 50, 50
+    sweep_ncell, sweep_n_freqs = 25, 25
     for arg in sys.argv[1:]:
         if arg.startswith("--repeats="):
             repeats = int(arg.split("=", 1)[1])

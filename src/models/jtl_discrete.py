@@ -78,7 +78,6 @@ class JTLDiscrete:
 
         thetas = np.sign(config.v_ratio)*dispersion_bloch(w_p, config.omega_cutoff / config.v_ratio) * ns
 
-
         M = config.M
         w_s = np.asarray(config.omegas) 
         Nf = len(w_s)
@@ -98,41 +97,46 @@ class JTLDiscrete:
             else:            
                 c[m] = -prefactor * np.sin(a) * 2*(-1)**((m-1)//2) * J[m]
 
-        cells = []
-        for i in range(ncell):
-            first = cell_topology == "L" and i == 0
 
-            halve_end = cell_topology == "L" and (i == 0 or i == ncell - 1)
-            C_end = C[i] / (2.0 if halve_end else 1.0)
-            _L, _wj, _th = L[i], wj[i], thetas[i]
-            _C = C_end
+        omega_sb = w_s[:, None] + np.array(config.ks_state)[None, :] * w_p  
 
-            # Sideband frequencies for each signal freq: (Nf, n)
-            omega_sb = w_s[:, None] + np.array(config.ks_state)[None, :] * w_p
+        halve_end = np.zeros(ncell, dtype=bool)
+        if cell_topology == "L":
+            halve_end[0] = True
+            halve_end[-1] = True
+        C_end = np.where(halve_end, C / 2.0, C)
 
-            coeffs_cell = {p: profile[i] * c[p] for p in range(1, M + 1)}
-            coeffs_cell[0] = c[0]
-            Zs_harm_arr = np.zeros((Nf, n, n), dtype=complex)
-            if not first:
-                Ccap_val = 1.0 / (_wj**2 * _L)
-                if config.epsilon:
-                    inductor = ModulatedInductor(
-                        eps=profile[i] * config.epsilon, theta=_th, order=M, L0=_L
-                    )
-                else:
-                    inductor = ModulatedInductor(coeffs=coeffs_cell, theta=_th, order=M)
-                squid = Component.parallel(inductor, Capacitor(Ccap_val))
-                Zs_harm_arr = squid.impedance_matrix(omega_sb)  # (Nf, n, n)
+        first = np.zeros(ncell, dtype=bool)
+        if cell_topology == "L":
+            first[0] = True
+        active = ~first 
+        idx_active = np.nonzero(active)[0]
+        na = idx_active.size
 
-            # Shunt-to-ground capacitor: unmodulated, so it doesn't couple
-            # sidebands -- its harmonic matrix is diagonal.
-            Yg = Capacitor(_C)
-            Yg_harm_arr = Yg.admittance_matrix(omega_sb)  # (Nf, n, n)
+        Zs_harm_arr = np.zeros((ncell, Nf, n, n), dtype=complex)
+        if na > 0:
+            L_act = L[idx_active]
+            wj_act = wj[idx_active]
+            th_act = thetas[idx_active]
+            profile_act = profile[idx_active]
+            Ccap_act = 1.0 / (wj_act**2 * L_act) 
 
-            cells.append(
-                CellImmitance(
-                    Zs_harm_fn=Zs_harm_arr,
-                    Yg_harm_fn=Yg_harm_arr,
+            if config.epsilon:
+                inductor = ModulatedInductor(
+                    eps=profile_act * config.epsilon, theta=th_act, order=M, L0=L_act
                 )
-            )
-        return cells
+            else:
+                coeffs_batched = {0: c[0]}
+                for p in range(1, M + 1):
+                    coeffs_batched[p] = c[p] * profile_act  # (na,)
+                inductor = ModulatedInductor(coeffs=coeffs_batched, theta=th_act, order=M)
+
+            squid = Component.parallel(inductor, Capacitor(Ccap_act))
+            Zs_harm_arr[idx_active] = squid.impedance_matrix(omega_sb)
+
+        Yg_harm_arr = Capacitor(C_end).admittance_matrix(omega_sb)
+
+        return [
+            CellImmitance(Zs_harm_fn=Zs_harm_arr[i], Yg_harm_fn=Yg_harm_arr[i])
+            for i in range(ncell)
+        ]
