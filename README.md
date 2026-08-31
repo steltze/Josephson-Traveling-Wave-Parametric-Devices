@@ -3,6 +3,8 @@
 Simulation and analysis toolkit for traveling-wave Josephson parametric
 amplifiers and converters (TWPA/TWPC) based on a lumped-element and discrete transmission line model using transfer-matrices to extract the network S-parameters. This software was developed in the LPENS-Quantic laboratory.
 
+> **Note:** This project is under active development. Please clone the repository and run it in place.
+
 ## Installation
 
 Dependencies are managed with [uv](https://docs.astral.sh/uv/), which
