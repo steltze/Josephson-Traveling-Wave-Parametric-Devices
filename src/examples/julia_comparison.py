@@ -24,26 +24,25 @@ REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 FIGURES_DIR = os.path.join(REPO_ROOT, "figures")
 
 
-def julia_comparison(dashboard):
-    ks_state = [-1, 0, 1]
-    M = 1
-    ncell = 320
+def julia_comparison(dashboard, *, M=1, ks_state=None, ncell=320, n_freqs=500, backend="numpy"):
+    if ks_state is None:
+        ks_state = [-1, 0, 1]
     cfg = SimulationConfig(
         Z0=50,
         M=M,
         ks_state=ks_state,
         ncell=ncell,
         cell_size=10e-6,
-        omega_cutoff=2 * 50 / 540e-3,  # L = 530 pH, C = 212 fF -> ~30 GHz
-        omega_pump=13.21 * 2 * np.pi,
+        omega_cutoff=2 * 50 / 530e-3,  # L = 530 pH, C = 212 fF -> ~30 GHz
+        omega_pump=6.8 * 2 * np.pi,
         omega_j=60 * 2 * np.pi,  # usually smaller
         epsilon=0.0,
         phi_dc_frac=1/3,  # Phi_dc/Phi0, matches julia/josephsoncircuits_comparison.jl's Phi_dc_frac
-        phi_rf_frac=0.015,
-        v_ratio=-6.0,  # > 0 => co-propagating, < 0 => counter-propagating
+        phi_rf_frac=0.01,
+        v_ratio=-2.5,  # > 0 => co-propagating, < 0 => counter-propagating
         freq_min=1,  # GHz
         freq_max=14,  # GHz
-        n_freqs=500,
+        n_freqs=n_freqs,
         disorder=False,
         epsilon_nramp=0,  # where the peak will be
         adiabatic_pump=False,
@@ -52,7 +51,7 @@ def julia_comparison(dashboard):
     log.info("omega_pump = %.3f GHz", cfg.omega_pump / (2 * np.pi))
     log.info("omega_cutoff = %.3f GHz", cfg.omega_cutoff / (2 * np.pi))
 
-    sim = Simulation(JTLDiscrete, cfg, backend="numpy", cell_topology="pi")
+    sim = Simulation(JTLDiscrete, cfg, backend=backend, cell_topology="pi")
     S_params = sim.get_s_matrix(normalize=True).array
 
     T_grid = sim.get_transfer_matrix_grid()
