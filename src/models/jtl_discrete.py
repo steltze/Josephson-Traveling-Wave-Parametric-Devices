@@ -4,7 +4,7 @@ import numpy as np
 
 from models.cell import CellImmitance
 from models.electrical_elements import Capacitor, Component, ModulatedInductor
-
+from models.dispersion_relations import dispersion_bloch
 
 class JTLDiscrete:
     """
@@ -114,17 +114,12 @@ class JTLDiscrete:
             coeffs_cell[0] = c[0]
             Zs_harm_arr = np.zeros((Nf, n, n), dtype=complex)
             if not first:
-                # Exact parallel-LC series impedance: JJ inductor || self-capacitance
                 Ccap_val = 1.0 / (_wj**2 * _L)
                 if config.epsilon:
-                    # Perturbative parametrization: modulation depth given
-                    # directly via config.epsilon.
                     inductor = ModulatedInductor(
                         eps=profile[i] * config.epsilon, theta=_th, order=M, L0=_L
                     )
                 else:
-                    # Exact Jacobi-Anger/Bessel parametrization, from
-                    # phi_rf_frac/phi_dc_frac.
                     inductor = ModulatedInductor(coeffs=coeffs_cell, theta=_th, order=M)
                 squid = Component.parallel(inductor, Capacitor(Ccap_val))
                 Zs_harm_arr = squid.impedance_matrix(omega_sb)  # (Nf, n, n)

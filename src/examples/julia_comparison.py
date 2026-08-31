@@ -64,16 +64,32 @@ def julia_comparison(dashboard):
     flux_conservation_S = check_photon_flux_conservation(
         S_params, cfg.omegas, cfg.omega_pump, cfg.ks_state
     )
-    _, ax = plt.subplots()
 
     signal_left_index = ks_state.index(0)
 
-    ax.plot(cfg.freqs, flux_conservation_S[:, signal_left_index])
-    ax.axhline(1, color="gray", ls="--", lw=1)
-    ax.set_xlabel("Frequency (GHz)")
-    ax.set_ylabel(r"$\sum_i \eta_i |S_{i,0}|^2$")
-    ax.set_title("Photon-flux conservation of port: signal left")
-    ax.grid(True, alpha=0.25)
+    with mpl.rc_context(PAPER_STYLE):
+        fig, ax = plt.subplots(figsize=(3.4, 2.6))
+
+        ax.plot(
+            cfg.freqs, flux_conservation_S[:, signal_left_index],
+            color=COLOR_PYTHON, lw=1.5, solid_capstyle="round",
+        )
+        ax.axhline(1, color="gray", ls="--", lw=0.8, zorder=0)
+        ax.set_xlabel("Signal frequency (GHz)")
+        ax.set_ylabel(r"$\sum_i \eta_i |S_{i,0}|^2$")
+        ax.set_title("Photon-flux conservation, signal left", loc="left")
+        ax.grid(True, alpha=0.3, linewidth=0.5)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        fig.tight_layout()
+
+        os.makedirs(FIGURES_DIR, exist_ok=True)
+        svg_path = os.path.join(FIGURES_DIR, "julia_comparison_flux_conservation.svg")
+        fig.savefig(svg_path)
+        log.info("Saved %s", svg_path)
+        png_path = os.path.join(FIGURES_DIR, "julia_comparison_flux_conservation.png")
+        fig.savefig(png_path, dpi=300)
+        log.info("Saved %s", png_path)
 
     plt.show()
 
