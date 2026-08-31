@@ -103,53 +103,28 @@ giving a sense of what the simulator can model and how it's been validated.
   <img src="figures/flux_conservation.svg" width="45%" alt="Photon-flux conservation check" />
 </p>
 
-The standalone signal→signal transmission spectrum for the same
-three-wave-mixing configuration used in the JosephsonCircuits.jl
-comparison below (ks_state = [-1, 0, 1], 320 cells, 13.21 GHz pump,
-Φ_dc/Φ0 = 1/3), shown on its own as a simple reference curve. Next to
-it, the corresponding photon-flux conservation check: the weighted sum
-$\sum_i \eta_i |S_{i,0}|^2$ over all signal/idler/pump ports driven
-from the left-signal port, which must equal 1 for a lossless,
-unitary S-matrix — confirming the transfer-matrix solver conserves
-photon flux to numerical precision across the swept band
-(`src/examples/julia_comparison.py`).
-
-
+The individual scattering parameters  from the left-signal port into every signal, idler, and pump-harmonic output mode, plotted in dB across the swept frequency band,  showing how the incident signal photon flux is redistributed among the direct, frequency-converted, and higher-order sidebands supported by the discrete JTL. Next to it, the corresponding photon-flux conservation check: the weighted sum $\sum_i \eta_i |S_{i,0}|^2$ over all signal/idler/pump ports driven from the left-signal port, which must equal 1 for a lossless, unitary S-matrix, confirming the transfer-matrix solver conserves photon flux to numerical precision across the swept band (examples/julia_comparison.py).
 ### Validated against JosephsonCircuits.jl
 
 ![](figures/python_julia_comparison.svg)
 
-Direct signal→signal transmission (top) and signal→idler conversion
-(bottom) for a 320-cell, flux-pumped Josephson transmission line
-(pump at 13.21 GHz, DC flux bias Φ_dc/Φ0 = 1/3), computed two independent
-ways: this repo's discrete transfer-matrix solver ("Python") and
-[JosephsonCircuits.jl](https://github.com/kpobrien/JosephsonCircuits.jl)
-("Julia"), a harmonic-balance Josephson-circuit simulator. The two curves
-overlay across the swept band, cross-validating the transfer-matrix
-approach against an independently-implemented harmonic-balance solver
-(`src/examples/head_to_head_comparison.py`).
-
+Direct signal→signal transmission (top) and signal→idler conversion (bottom) for a 320-cell, flux-pumped Josephson transmission line (pump at 13.21 GHz, DC flux bias $\Phi_{\text{dc}}/\Phi_0 = 1/3$, AC flux bias $\Phi_{\text{rf}}/\Phi_0 = 0.015$), computed two independent ways: this repo's discrete transfer-matrix solver ("Python") and [JosephsonCircuits.jl](https://github.com/kpobrien/JosephsonCircuits.jl) ("Julia"), a harmonic-balance Josephson-circuit simulator. The two curves overlay across the swept band, cross-validating the transfer-matrix approach against an independently-implemented harmonic-balance solver
+(`examples/head_to_head_comparison.py`).
 ### Two independent pump tones on one line
 
 ![Two-pump JTL example](figures/multi_pump_jtl_example.svg)
 
-A single 320-cell Josephson transmission line with two independent pump tones (10.0 GHz and 13.2 GHz) at once, each producing its own signal→idler conversion product (idler₁ = signal + pump₁, idler₂ = signal + pump₂). Internally this builds a tensor-product state lattice over both pumps' harmonics rather than the single flat harmonic ladder used for one pump (`examples/multi_pump_jtl_example.py).
+A single 320-cell Josephson transmission line with two independent pump tones (10.0 GHz and 13.2 GHz) at once, each producing its own signal→idler conversion product ($\omega_{\text{idler}1} = \omega_{\text{signal}} + \omega_{\text{pump}1}$, $\omega_{\text{idler}2} = \omega_{\text{signal}} + \omega_{\text{pump}2}$, $\omega_{\text{idler}3} = \omega_{\text{signal}} + \omega_{\text{pump}1} + \omega_{\text{pump}_2}$). Internally this builds a tensor-product state lattice over both pumps' harmonics rather than the single flat harmonic ladder used for one pump (`examples/multi_pump_jtl_example.py).
 ### Adiabatic pump-strength ramp
 
-![Adiabatic pump calibration](figures/adiabatic_pump_calibration.svg)
+![Adiabatic pump calibration](figures/adiabatic_pump.svg)
 
 Transmission through a 1627-cell counter-pumped JTL with an adiabatically decreasing pump velocity, which shifts the phase-matching point for different conversion processes along the line and merges their stopbands into one continuous gap of larger bandwidth and roughly constant attenuation.
 ### Spurious slot-mode coupling
 
-![Slot-mode coupling example](figures/slot_mode_slot5_ci0p1.svg)
+![Slot-mode coupling example](figures/slot_mode_coupling.svg)
 
-`JTLDiscreteSlotMode` adds a stray slot-line resonance, coupled into
-each unit cell through a coupling capacitance, to model how a parasitic
-package/chip-mode resonance perturbs the JTL's conversion and
-transmission spectra. This case has the slot mode's cutoff at 5× the
-line's own cutoff frequency and a coupling capacitance 0.1× the slot
-mode's self-capacitance; it's one point from a larger sweep over both
-ratios used to map out where such spurious couplings matter
-(`src/examples/slot_mode_sweep.py`).
+`JTLDiscreteSlotMode` adds a stray slot-line resonance, coupled into each unit cell through a coupling capacitance, to model how a parasitic package/chip-mode resonance perturbs the JTL's conversion and transmission spectra. This case has the slot mode's cutoff at 5 \times the line's own cutoff frequency and a coupling capacitance 0.1 \times the main mode's self-capacitance. It is one point from a larger sweep over both
+ratios used to map out where such spurious couplings matter (`examples/slot_mode_sweep.py`).
 
 
