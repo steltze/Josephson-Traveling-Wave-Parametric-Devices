@@ -220,4 +220,12 @@ __marimo__/
 *.pdf
 *.tex
 *.svg
-figures/
+figures/*
+
+# Figures referenced in README.md -- keep these tracked.
+!figures/adiabatic_pump.svg
+!figures/python_julia_comparison.svg
+!figures/flux_conservation.svg
+!figures/amplification.svg
+!figures/multi_pump_jtl_example.svg
+!figures/slot_mode_coupling.svg
